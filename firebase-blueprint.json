@@ -1,0 +1,236 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile and preferences",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Display name" },
+        "email": { "type": "string", "description": "User email" },
+        "photoUrl": { "type": "string", "description": "Profile photo URI or URL" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "blocked": { "type": "boolean" },
+        "themeMode": { "type": "string", "enum": ["dark", "light", "system"] },
+        "language": { "type": "string" },
+        "notificationsEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "email", "role", "blocked", "themeMode", "language", "notificationsEnabled", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Authorized admin role marker",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "createdAt"]
+    },
+    "UserCredits": {
+      "title": "UserCredits",
+      "description": "User credit wallet balance",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "balance": { "type": "integer" },
+        "totalEarned": { "type": "integer" },
+        "totalSpent": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "balance", "totalEarned", "totalSpent", "createdAt", "updatedAt"]
+    },
+    "CreditTransaction": {
+      "title": "CreditTransaction",
+      "description": "Immutable credit ledger entry",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["welcome", "reward_ad", "export_image", "export_video", "admin_grant"] },
+        "amount": { "type": "integer" },
+        "description": { "type": "string" },
+        "referenceId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "amount", "description", "createdAt"]
+    },
+    "RewardAdLog": {
+      "title": "RewardAdLog",
+      "description": "Rewarded ad completion record with idempotency key",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "adUnitId": { "type": "string" },
+        "rewardAmount": { "type": "integer" },
+        "status": { "type": "string", "enum": ["completed"] },
+        "idempotencyKey": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "adUnitId", "rewardAmount", "status", "idempotencyKey", "createdAt"]
+    },
+    "Template": {
+      "title": "Template",
+      "description": "Editable graphic design template",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "previewStyle": { "type": "string" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" },
+        "backgroundColorHex": { "type": "string" },
+        "backgroundGradientHex": { "type": "string" },
+        "layers": { "type": "array" },
+        "fontsUsed": { "type": "array" },
+        "colorsUsed": { "type": "array" },
+        "premium": { "type": "boolean" },
+        "published": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "category", "previewStyle", "width", "height", "backgroundColorHex", "layers", "fontsUsed", "colorsUsed", "premium", "published", "createdAt", "updatedAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Template category definition",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "iconKey": { "type": "string" },
+        "sortOrder": { "type": "integer" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "iconKey", "sortOrder", "active", "createdAt", "updatedAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "User graphic design or video editing project",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "formatName": { "type": "string" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" },
+        "backgroundColorHex": { "type": "string" },
+        "backgroundGradientHex": { "type": "string" },
+        "layers": { "type": "array" },
+        "videoClips": { "type": "array" },
+        "projectType": { "type": "string", "enum": ["design", "video"] },
+        "favorite": { "type": "boolean" },
+        "thumbnailText": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "category", "formatName", "width", "height", "backgroundColorHex", "layers", "videoClips", "projectType", "favorite", "createdAt", "updatedAt"]
+    },
+    "ExportRecord": {
+      "title": "ExportRecord",
+      "description": "Export reservation and completion log",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectTitle": { "type": "string" },
+        "exportType": { "type": "string", "enum": ["image_png", "image_jpg", "video_mp4"] },
+        "resolution": { "type": "string" },
+        "creditsCost": { "type": "integer" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed", "cancelled"] },
+        "fileName": { "type": "string" },
+        "fileSizeBytes": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "projectId", "projectTitle", "exportType", "resolution", "creditsCost", "status", "fileName", "fileSizeBytes", "createdAt", "updatedAt"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "User favorite template or project link",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemType": { "type": "string", "enum": ["template", "project"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "itemId", "itemType", "createdAt"]
+    },
+    "GraphicAsset": {
+      "title": "GraphicAsset",
+      "description": "Managed sticker, shape, frame, or texture asset",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "assetType": { "type": "string", "enum": ["shape", "sticker", "frame", "texture", "icon"] },
+        "category": { "type": "string" },
+        "colorHex": { "type": "string" },
+        "symbolKey": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "assetType", "category", "colorHex", "symbolKey", "createdAt"]
+    },
+    "FontEntry": {
+      "title": "FontEntry",
+      "description": "Managed typography entry",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "familyKey": { "type": "string" },
+        "category": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "familyKey", "category", "active", "createdAt"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "User or broadcast notification",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message", "read", "createdAt"]
+    },
+    "ReportItem": {
+      "title": "ReportItem",
+      "description": "Content or support report submitted by users",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "targetId": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "targetId", "reason", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": { "$ref": "#/entities/UserProfile" }, "description": "User profiles" },
+    "/admins/{userId}": { "schema": { "$ref": "#/entities/AdminRecord" }, "description": "Admin role grants" },
+    "/user_credits/{userId}": { "schema": { "$ref": "#/entities/UserCredits" }, "description": "User credit balances" },
+    "/credit_transactions/{txId}": { "schema": { "$ref": "#/entities/CreditTransaction" }, "description": "Credit history ledger" },
+    "/reward_ads/{adId}": { "schema": { "$ref": "#/entities/RewardAdLog" }, "description": "Rewarded ad completions" },
+    "/templates/{templateId}": { "schema": { "$ref": "#/entities/Template" }, "description": "Editable templates" },
+    "/categories/{categoryId}": { "schema": { "$ref": "#/entities/Category" }, "description": "Template categories" },
+    "/projects/{projectId}": { "schema": { "$ref": "#/entities/Project" }, "description": "User graphic and video projects" },
+    "/exports/{exportId}": { "schema": { "$ref": "#/entities/ExportRecord" }, "description": "Export jobs and history" },
+    "/favorites/{favoriteId}": { "schema": { "$ref": "#/entities/Favorite" }, "description": "User favorites" },
+    "/assets/{assetId}": { "schema": { "$ref": "#/entities/GraphicAsset" }, "description": "Graphic stickers and shapes" },
+    "/fonts/{fontId}": { "schema": { "$ref": "#/entities/FontEntry" }, "description": "Available editor fonts" },
+    "/notifications/{notificationId}": { "schema": { "$ref": "#/entities/NotificationItem" }, "description": "In-app notifications" },
+    "/reports/{reportId}": { "schema": { "$ref": "#/entities/ReportItem" }, "description": "Moderation and support reports" }
+  }
+}

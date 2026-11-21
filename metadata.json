@@ -1,0 +1,6 @@
+{
+  "name": "CANVA AO",
+  "description": "Plataforma profissional de design grafico, edicao de videos e inteligencia artificial.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,426 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email == 'albertocassoma200@gmail.com' &&
+        request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() ||
+        (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    // Entity Validators
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+        data.email is string && data.email.size() <= 160 &&
+        (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
+        data.role in ['user', 'admin'] &&
+        data.blocked is bool &&
+        data.themeMode in ['dark', 'light', 'system'] &&
+        data.language is string && data.language.size() >= 2 && data.language.size() <= 10 &&
+        data.notificationsEnabled is bool &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidAdminRecord(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.email is string && data.email.size() <= 160 &&
+        isValidTimestamp(data.createdAt);
+    }
+
+    function isValidUserCredits(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.balance is int && data.balance >= 0 && data.balance <= 1000000 &&
+        data.totalEarned is int && data.totalEarned >= 0 &&
+        data.totalSpent is int && data.totalSpent >= 0 &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCreditTransaction(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.type in ['welcome', 'reward_ad', 'export_image', 'export_video', 'admin_grant'] &&
+        data.amount is int && data.amount >= -100 && data.amount <= 10000 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 200 &&
+        (!('referenceId' in data) || (data.referenceId is string && data.referenceId.size() <= 128)) &&
+        isValidTimestamp(data.createdAt);
+    }
+
+    function isValidRewardAd(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.adUnitId is string && data.adUnitId.size() >= 1 && data.adUnitId.size() <= 128 &&
+        data.rewardAmount == 2 &&
+        data.status == 'completed' &&
+        data.idempotencyKey is string && data.idempotencyKey.size() >= 6 && data.idempotencyKey.size() <= 128 &&
+        isValidTimestamp(data.createdAt);
+    }
+
+    function isValidTemplate(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 50 &&
+        data.previewStyle is string && data.previewStyle.size() <= 60 &&
+        data.width is int && data.width >= 100 && data.width <= 8000 &&
+        data.height is int && data.height >= 100 && data.height <= 8000 &&
+        data.backgroundColorHex is string && data.backgroundColorHex.size() <= 20 &&
+        (!('backgroundGradientHex' in data) || (data.backgroundGradientHex is string && data.backgroundGradientHex.size() <= 20)) &&
+        data.layers is list && data.layers.size() <= 50 &&
+        data.fontsUsed is list && data.fontsUsed.size() <= 10 &&
+        data.colorsUsed is list && data.colorsUsed.size() <= 10 &&
+        data.premium is bool &&
+        data.published is bool &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCategory(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 50 &&
+        data.iconKey is string && data.iconKey.size() >= 1 && data.iconKey.size() <= 40 &&
+        data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 1000 &&
+        data.active is bool &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidProject(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 50 &&
+        data.formatName is string && data.formatName.size() >= 1 && data.formatName.size() <= 60 &&
+        data.width is int && data.width >= 100 && data.width <= 8000 &&
+        data.height is int && data.height >= 100 && data.height <= 8000 &&
+        data.backgroundColorHex is string && data.backgroundColorHex.size() <= 20 &&
+        (!('backgroundGradientHex' in data) || (data.backgroundGradientHex is string && data.backgroundGradientHex.size() <= 20)) &&
+        data.layers is list && data.layers.size() <= 60 &&
+        data.videoClips is list && data.videoClips.size() <= 20 &&
+        data.projectType in ['design', 'video'] &&
+        data.favorite is bool &&
+        (!('thumbnailText' in data) || (data.thumbnailText is string && data.thumbnailText.size() <= 120)) &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidExport(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.projectId is string && data.projectId.size() >= 1 && data.projectId.size() <= 128 &&
+        data.projectTitle is string && data.projectTitle.size() >= 1 && data.projectTitle.size() <= 120 &&
+        data.exportType in ['image_png', 'image_jpg', 'video_mp4'] &&
+        data.resolution is string && data.resolution.size() >= 2 && data.resolution.size() <= 30 &&
+        data.creditsCost in [2, 4] &&
+        data.status in ['pending', 'completed', 'failed', 'cancelled'] &&
+        data.fileName is string && data.fileName.size() >= 1 && data.fileName.size() <= 160 &&
+        data.fileSizeBytes is int && data.fileSizeBytes >= 0 &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidFavorite(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.itemId is string && data.itemId.size() >= 1 && data.itemId.size() <= 128 &&
+        data.itemType in ['template', 'project'] &&
+        isValidTimestamp(data.createdAt);
+    }
+
+    function isValidAsset(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+        data.assetType in ['shape', 'sticker', 'frame', 'texture', 'icon'] &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 40 &&
+        data.colorHex is string && data.colorHex.size() <= 20 &&
+        data.symbolKey is string && data.symbolKey.size() >= 1 && data.symbolKey.size() <= 40 &&
+        isValidTimestamp(data.createdAt);
+    }
+
+    function isValidFont(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+        data.familyKey is string && data.familyKey.size() >= 1 && data.familyKey.size() <= 40 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 40 &&
+        data.active is bool &&
+        isValidTimestamp(data.createdAt);
+    }
+
+    function isValidNotification(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 100 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 400 &&
+        data.read is bool &&
+        isValidTimestamp(data.createdAt);
+    }
+
+    function isValidReport(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+        data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 300 &&
+        data.status in ['open', 'resolved'] &&
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt);
+    }
+
+    // 1. Users
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) && isOwner(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().userId == userId &&
+        incoming().role == 'user' &&
+        incoming().blocked == false &&
+        incoming().keys().hasAll(['userId', 'displayName', 'email', 'role', 'blocked', 'themeMode', 'language', 'notificationsEnabled', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['userId', 'displayName', 'email', 'photoUrl', 'role', 'blocked', 'themeMode', 'language', 'notificationsEnabled', 'createdAt', 'updatedAt']);
+      allow update: if isValidId(userId) && isValidUserProfile(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt && (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'blocked', 'displayName', 'updatedAt'])) ||
+          (isOwner(userId) && incoming().role == existing().role && incoming().blocked == existing().blocked &&
+           incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoUrl', 'themeMode', 'language', 'notificationsEnabled', 'updatedAt']))
+        );
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+    }
+
+    // 2. Admins
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isValidId(userId) && isAdmin() && isValidAdminRecord(incoming()) &&
+        incoming().keys().hasAll(['userId', 'email', 'createdAt']) &&
+        incoming().keys().hasOnly(['userId', 'email', 'createdAt']);
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // 3. User Credits Wallet
+    match /user_credits/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) && isOwner(userId) &&
+        isValidUserCredits(incoming()) &&
+        incoming().userId == userId &&
+        incoming().balance == 50 &&
+        incoming().totalEarned == 50 &&
+        incoming().totalSpent == 0 &&
+        incoming().keys().hasAll(['userId', 'balance', 'totalEarned', 'totalSpent', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['userId', 'balance', 'totalEarned', 'totalSpent', 'createdAt', 'updatedAt']);
+      allow update: if isValidId(userId) && isValidUserCredits(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'totalEarned', 'totalSpent', 'updatedAt']) && (
+          isAdmin() ||
+          (isOwner(userId) && (
+            // Rewarded Ad: +2 credits
+            (incoming().balance == existing().balance + 2 &&
+             incoming().totalEarned == existing().totalEarned + 2 &&
+             incoming().totalSpent == existing().totalSpent) ||
+            // Image Export: -2 credits
+            (existing().balance >= 2 &&
+             incoming().balance == existing().balance - 2 &&
+             incoming().totalSpent == existing().totalSpent + 2 &&
+             incoming().totalEarned == existing().totalEarned) ||
+            // Video Export: -4 credits
+            (existing().balance >= 4 &&
+             incoming().balance == existing().balance - 4 &&
+             incoming().totalSpent == existing().totalSpent + 4 &&
+             incoming().totalEarned == existing().totalEarned)
+          ))
+        );
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+    }
+
+    // 4. Credit Transactions Ledger
+    match /credit_transactions/{txId} {
+      allow get: if isValidId(txId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(txId) && isSignedIn() && isValidCreditTransaction(incoming()) &&
+        incoming().keys().hasAll(['userId', 'type', 'amount', 'description', 'createdAt']) &&
+        incoming().keys().hasOnly(['userId', 'type', 'amount', 'description', 'referenceId', 'createdAt']) && (
+          isAdmin() ||
+          (incoming().userId == request.auth.uid && (
+            (incoming().type == 'welcome' && incoming().amount == 50) ||
+            (incoming().type == 'reward_ad' && incoming().amount == 2) ||
+            (incoming().type == 'export_image' && incoming().amount == -2) ||
+            (incoming().type == 'export_video' && incoming().amount == -4)
+          ))
+        );
+      allow update, delete: if false;
+    }
+
+    // 5. Reward Ads
+    match /reward_ads/{adId} {
+      allow get: if isValidId(adId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(adId) && isSignedIn() &&
+        incoming().userId == request.auth.uid &&
+        isValidRewardAd(incoming()) &&
+        incoming().keys().hasAll(['userId', 'adUnitId', 'rewardAmount', 'status', 'idempotencyKey', 'createdAt']) &&
+        incoming().keys().hasOnly(['userId', 'adUnitId', 'rewardAmount', 'status', 'idempotencyKey', 'createdAt']);
+      allow update, delete: if false;
+    }
+
+    // 6. Templates (Readable by authenticated users, managed by admins)
+    match /templates/{templateId} {
+      allow get: if isValidId(templateId) && isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isValidId(templateId) && isAdmin() && isValidTemplate(incoming()) &&
+        incoming().keys().hasAll(['name', 'category', 'previewStyle', 'width', 'height', 'backgroundColorHex', 'layers', 'fontsUsed', 'colorsUsed', 'premium', 'published', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['name', 'category', 'previewStyle', 'width', 'height', 'backgroundColorHex', 'backgroundGradientHex', 'layers', 'fontsUsed', 'colorsUsed', 'premium', 'published', 'createdAt', 'updatedAt']);
+      allow update: if isValidId(templateId) && isAdmin() && isValidTemplate(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'previewStyle', 'width', 'height', 'backgroundColorHex', 'backgroundGradientHex', 'layers', 'fontsUsed', 'colorsUsed', 'premium', 'published', 'updatedAt']);
+      allow delete: if isValidId(templateId) && isAdmin();
+    }
+
+    // 7. Categories
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId) && isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isValidId(categoryId) && isAdmin() && isValidCategory(incoming()) &&
+        incoming().keys().hasAll(['name', 'iconKey', 'sortOrder', 'active', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['name', 'iconKey', 'sortOrder', 'active', 'createdAt', 'updatedAt']);
+      allow update: if isValidId(categoryId) && isAdmin() && isValidCategory(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'iconKey', 'sortOrder', 'active', 'updatedAt']);
+      allow delete: if isValidId(categoryId) && isAdmin();
+    }
+
+    // 8. Projects
+    match /projects/{projectId} {
+      allow get: if isValidId(projectId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(projectId) && isSignedIn() &&
+        incoming().userId == request.auth.uid &&
+        isValidProject(incoming()) &&
+        incoming().keys().hasAll(['userId', 'title', 'category', 'formatName', 'width', 'height', 'backgroundColorHex', 'layers', 'videoClips', 'projectType', 'favorite', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['userId', 'title', 'category', 'formatName', 'width', 'height', 'backgroundColorHex', 'backgroundGradientHex', 'layers', 'videoClips', 'projectType', 'favorite', 'thumbnailText', 'createdAt', 'updatedAt']);
+      allow update: if isValidId(projectId) && isSignedIn() &&
+        (existing().userId == request.auth.uid || isAdmin()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        isValidProject(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'formatName', 'width', 'height', 'backgroundColorHex', 'backgroundGradientHex', 'layers', 'videoClips', 'projectType', 'favorite', 'thumbnailText', 'updatedAt']);
+      allow delete: if isValidId(projectId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 9. Exports (with Terminal State Locking)
+    match /exports/{exportId} {
+      allow get: if isValidId(exportId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(exportId) && isSignedIn() &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'pending' &&
+        isValidExport(incoming()) &&
+        incoming().keys().hasAll(['userId', 'projectId', 'projectTitle', 'exportType', 'resolution', 'creditsCost', 'status', 'fileName', 'fileSizeBytes', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['userId', 'projectId', 'projectTitle', 'exportType', 'resolution', 'creditsCost', 'status', 'fileName', 'fileSizeBytes', 'createdAt', 'updatedAt']);
+      allow update: if isValidId(exportId) && isSignedIn() &&
+        (existing().userId == request.auth.uid || isAdmin()) &&
+        existing().status == 'pending' &&
+        incoming().status in ['completed', 'failed', 'cancelled'] &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        isValidExport(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'fileSizeBytes', 'updatedAt']);
+      allow delete: if isValidId(exportId) && isAdmin();
+    }
+
+    // 10. Favorites
+    match /favorites/{favoriteId} {
+      allow get: if isValidId(favoriteId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(favoriteId) && isSignedIn() &&
+        incoming().userId == request.auth.uid &&
+        isValidFavorite(incoming()) &&
+        incoming().keys().hasAll(['userId', 'itemId', 'itemType', 'createdAt']) &&
+        incoming().keys().hasOnly(['userId', 'itemId', 'itemType', 'createdAt']);
+      allow delete: if isValidId(favoriteId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow update: if false;
+    }
+
+    // 11. Graphic Assets
+    match /assets/{assetId} {
+      allow get: if isValidId(assetId) && isSignedIn();
+      allow list: if isSignedIn();
+      allow create, update: if isValidId(assetId) && isAdmin() && isValidAsset(incoming()) &&
+        incoming().keys().hasAll(['name', 'assetType', 'category', 'colorHex', 'symbolKey', 'createdAt']) &&
+        incoming().keys().hasOnly(['name', 'assetType', 'category', 'colorHex', 'symbolKey', 'createdAt']);
+      allow delete: if isValidId(assetId) && isAdmin();
+    }
+
+    // 12. Fonts
+    match /fonts/{fontId} {
+      allow get: if isValidId(fontId) && isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isValidId(fontId) && isAdmin() && isValidFont(incoming()) &&
+        incoming().keys().hasAll(['name', 'familyKey', 'category', 'active', 'createdAt']) &&
+        incoming().keys().hasOnly(['name', 'familyKey', 'category', 'active', 'createdAt']);
+      allow update: if isValidId(fontId) && isAdmin() && isValidFont(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'familyKey', 'category', 'active']);
+      allow delete: if isValidId(fontId) && isAdmin();
+    }
+
+    // 13. Notifications
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && isSignedIn() &&
+        (existing().userId == request.auth.uid || existing().userId == 'all' || isAdmin());
+      allow list: if isSignedIn() &&
+        (resource.data.userId == request.auth.uid || resource.data.userId == 'all' || isAdmin());
+      allow create: if isValidId(notificationId) && isAdmin() && isValidNotification(incoming()) &&
+        incoming().keys().hasAll(['userId', 'title', 'message', 'read', 'createdAt']) &&
+        incoming().keys().hasOnly(['userId', 'title', 'message', 'read', 'createdAt']);
+      allow update: if isValidId(notificationId) && isSignedIn() && isValidNotification(incoming()) &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['read']))
+        );
+      allow delete: if isValidId(notificationId) && isAdmin();
+    }
+
+    // 14. Reports
+    match /reports/{reportId} {
+      allow get: if isValidId(reportId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(reportId) && isSignedIn() &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'open' &&
+        isValidReport(incoming()) &&
+        incoming().keys().hasAll(['userId', 'targetId', 'reason', 'status', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['userId', 'targetId', 'reason', 'status', 'createdAt', 'updatedAt']);
+      allow update: if isValidId(reportId) && isAdmin() && isValidReport(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isValidId(reportId) && isAdmin();
+    }
+  }
+}
