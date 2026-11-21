@@ -8,7 +8,6 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
-import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -30,6 +29,16 @@ import kotlinx.coroutines.withContext
 
 private const val TAG = "Auth"
 
+/** Returns the Firebase-generated Google OAuth client ID when google-services.json is configured. */
+private fun getGoogleWebClientId(context: Context): String? {
+    val resourceId = context.resources.getIdentifier(
+        "default_web_client_id",
+        "string",
+        context.packageName
+    )
+    return resourceId.takeIf { it != 0 }?.let(context::getString)
+}
+
 fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
     val listener = FirebaseAuth.AuthStateListener { auth ->
         trySend(auth.currentUser)
@@ -49,9 +58,8 @@ fun attemptAutoSignIn(
         onAuthSuccess()
         return
     }
-    val clientId = try {
-        context.getString(R.string.default_web_client_id)
-    } catch (_: Exception) {
+    val clientId = getGoogleWebClientId(context)
+    if (clientId.isNullOrBlank()) {
         onUnauthenticated()
         return
     }
@@ -89,10 +97,9 @@ fun onGoogleSignInClicked(
     scope: CoroutineScope,
     onAuthCancelled: () -> Unit = {}
 ) {
-    val clientId = try {
-        context.getString(R.string.default_web_client_id)
-    } catch (_: Exception) {
-        onAuthError("Configuração Google Sign-In ausente: default_web_client_id não encontrado.")
+    val clientId = getGoogleWebClientId(context)
+    if (clientId.isNullOrBlank()) {
+        onAuthError("Configuração Google Sign-In ausente. Adicione o ficheiro google-services.json do projeto Firebase.")
         return
     }
     val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
