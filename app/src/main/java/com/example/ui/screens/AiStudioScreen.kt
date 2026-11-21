@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Image
@@ -74,14 +75,21 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.core.audio.LocalSoundEffects
 import com.example.core.model.DesignLayer
 import com.example.core.model.DesignProject
+import com.example.core.model.DesignTemplate
+import com.example.core.model.ImageMaskKind
 import com.example.core.model.LayerType
+import com.example.core.model.ShapeKind
+import com.example.core.model.TemplateSeedCatalog
 import com.example.core.model.UiState
 import com.example.engine.graphics.BitmapRenderer
+import com.example.ui.components.CanvaAoLogoMark
 import com.example.ui.theme.CyanGlow
 import com.example.ui.theme.ElectricIndigo
 import com.example.ui.theme.ElectricViolet
+import com.example.ui.theme.NavyPrimary
 import com.example.ui.theme.OrangeAccent
 import com.example.ui.viewmodel.AiStudioViewModel
 import kotlinx.coroutines.Dispatchers
@@ -95,12 +103,14 @@ fun AiStudioScreen(
     currentUserId: String,
     onBack: () -> Unit,
     onOpenAiProjectInEditor: (DesignProject) -> Unit,
+    onSaveAsTemplate: (DesignTemplate) -> Unit,
     onShowMessage: (String) -> Unit
 ) {
     BackHandler { onBack() }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val sound = LocalSoundEffects.current
     val messages by aiViewModel.messages.collectAsStateWithLifecycle()
     val chatBusy by aiViewModel.chatBusy.collectAsStateWithLifecycle()
     val imageGenState by aiViewModel.imageGenState.collectAsStateWithLifecycle()
@@ -115,6 +125,19 @@ fun AiStudioScreen(
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.lastIndex)
+        }
+    }
+
+    val latestProposalCount = messages.count { it.designProposal != null }
+    LaunchedEffect(latestProposalCount) {
+        if (latestProposalCount > 0) {
+            sound?.playAiMagic()
+        }
+    }
+
+    LaunchedEffect(imageGenState) {
+        if (imageGenState is UiState.Success && (imageGenState as UiState.Success<Bitmap?>).data != null) {
+            sound?.playAiMagic()
         }
     }
 
@@ -152,10 +175,11 @@ fun AiStudioScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        CanvaAoLogoMark(size = 26.dp)
                         Text("AI Studio", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
                         Surface(color = ElectricViolet, shape = RoundedCornerShape(8.dp)) {
                             Text(
-                                "Beta",
+                                "IA Templates",
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -172,38 +196,43 @@ fun AiStudioScreen(
                 .padding(padding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Gradient Hero Banner matching mockup
+            // Gradient Hero Banner with CANVA AO app icon
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 10.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Brush.linearGradient(listOf(ElectricIndigo, ElectricViolet, CyanGlow)))
+                    .background(Brush.linearGradient(listOf(NavyPrimary, ElectricIndigo, ElectricViolet)))
+                    .border(1.dp, CyanGlow.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
                     .padding(16.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(alpha = 0.12f))
+                            .border(1.dp, CyanGlow.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CanvaAoLogoMark(size = 36.dp)
+                    }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Crie com Inteligência Artificial",
+                            text = "IA Oficial CANVA AO",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
                             color = Color.White
                         )
                         Text(
-                            text = "Transforme ideias em cartazes editáveis, imagens e legendas profissionais.",
+                            text = "Crie templates editáveis com fotos reais, cartazes, imagens e legendas em segundos.",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.9f)
                         )
                     }
-                    Icon(
-                        Icons.Filled.AutoAwesome,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(36.dp)
-                    )
                 }
             }
 
@@ -214,19 +243,28 @@ fun AiStudioScreen(
             ) {
                 Tab(
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    text = { Text("Assistente & Design") },
+                    onClick = {
+                        sound?.playTap()
+                        selectedTab = 0
+                    },
+                    text = { Text("Criar Templates & IA") },
                     icon = { Icon(Icons.Filled.Brush, null, modifier = Modifier.size(18.dp)) }
                 )
                 Tab(
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
+                    onClick = {
+                        sound?.playTap()
+                        selectedTab = 1
+                    },
                     text = { Text("Gerar Imagem") },
                     icon = { Icon(Icons.Filled.Image, null, modifier = Modifier.size(18.dp)) }
                 )
                 Tab(
                     selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
+                    onClick = {
+                        sound?.playTap()
+                        selectedTab = 2
+                    },
                     text = { Text("Textos & IA") },
                     icon = { Icon(Icons.Filled.EditNote, null, modifier = Modifier.size(18.dp)) }
                 )
@@ -234,7 +272,7 @@ fun AiStudioScreen(
 
             when (selectedTab) {
                 0 -> {
-                    // Quick suggestions strip
+                    // Quick template & design suggestions strip
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -243,15 +281,17 @@ fun AiStudioScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val quickPrompts = listOf(
-                            "Cria um cartaz profissional para uma loja de roupas.",
+                            "Cria um template profissional de notícias de última hora.",
+                            "Cria um template de publicidade para redes sociais e Instagram.",
+                            "Cria um template corporativo de negócios moderno.",
                             "Cria um flyer de promoção 50% OFF para restaurante.",
-                            "Cria uma capa moderna para evento de música.",
                             "Sugira uma paleta de cores para marca de tecnologia."
                         )
                         quickPrompts.forEach { suggestion ->
                             FilterChip(
                                 selected = false,
                                 onClick = {
+                                    sound?.playTap()
                                     aiViewModel.sendChatPrompt(
                                         suggestion,
                                         buildDesignAlso = suggestion.startsWith("Cria")
@@ -305,18 +345,32 @@ fun AiStudioScreen(
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                         msg.designProposal?.let { proposal ->
-                                            Button(
-                                                onClick = {
-                                                    onOpenAiProjectInEditor(proposal.toEditableProject(currentUserId))
-                                                },
-                                                colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent, contentColor = Color.White),
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .testTag("ai_open_design_button")
-                                            ) {
-                                                Icon(Icons.Filled.Brush, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text("Abrir Design no Editor")
+                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Button(
+                                                    onClick = {
+                                                        onOpenAiProjectInEditor(proposal.toEditableProject(currentUserId))
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent, contentColor = Color.White),
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .testTag("ai_open_design_button")
+                                                ) {
+                                                    Icon(Icons.Filled.Brush, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text("Abrir Design no Editor")
+                                                }
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        onSaveAsTemplate(proposal.toDesignTemplate())
+                                                    },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .testTag("ai_save_as_template_button")
+                                                ) {
+                                                    Icon(Icons.Filled.BookmarkAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text("Guardar como Template")
+                                                }
                                             }
                                         }
                                         msg.generatedBitmap?.let { bmp ->
@@ -355,6 +409,7 @@ fun AiStudioScreen(
                             )
                             IconButton(
                                 onClick = {
+                                    sound?.playTap()
                                     val p = promptInput
                                     promptInput = ""
                                     aiViewModel.sendChatPrompt(p)
@@ -397,7 +452,10 @@ fun AiStudioScreen(
                                             .testTag("ai_image_prompt_input")
                                     )
                                     Button(
-                                        onClick = { aiViewModel.generateAiImage(imagePrompt) },
+                                        onClick = {
+                                            sound?.playTap()
+                                            aiViewModel.generateAiImage(imagePrompt)
+                                        },
                                         enabled = imageGenState !is UiState.Loading && imagePrompt.isNotBlank(),
                                         colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent),
                                         modifier = Modifier
@@ -498,6 +556,112 @@ fun AiStudioScreen(
                                                     modifier = Modifier.fillMaxWidth()
                                                 ) {
                                                     Text("Usar no Editor Gráfico")
+                                                }
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        scope.launch {
+                                                            val uri = BitmapRenderer.saveBitmapToTempUri(context, bmp, "ai_tpl_img")
+                                                            val titleText = imagePrompt.trim().take(28).ifBlank { "Template IA" }
+                                                            val tpl = DesignTemplate(
+                                                                id = "ai_img_tpl_${UUID.randomUUID().toString().take(8)}",
+                                                                name = titleText,
+                                                                category = "Publicidade",
+                                                                previewStyle = "ai_studio",
+                                                                width = 1080L,
+                                                                height = 1080L,
+                                                                backgroundColorHex = "#0A1628",
+                                                                backgroundGradientHex = "#1E3A8A",
+                                                                layers = listOf(
+                                                                    DesignLayer(
+                                                                        layerId = "ai_bg_${UUID.randomUUID().toString().take(6)}",
+                                                                        type = LayerType.IMAGE,
+                                                                        name = "Fundo IA",
+                                                                        xFraction = 0.5f,
+                                                                        yFraction = 0.5f,
+                                                                        widthFraction = 1.0f,
+                                                                        heightFraction = 1.0f,
+                                                                        imageUri = uri.toString()
+                                                                    ).toMap(),
+                                                                    DesignLayer(
+                                                                        layerId = "ai_scrim_${UUID.randomUUID().toString().take(6)}",
+                                                                        type = LayerType.SHAPE,
+                                                                        name = "Gradiente Inferior",
+                                                                        xFraction = 0.5f,
+                                                                        yFraction = 0.68f,
+                                                                        widthFraction = 1.0f,
+                                                                        heightFraction = 0.64f,
+                                                                        colorHex = "#070D19",
+                                                                        opacity = 0.90f,
+                                                                        shapeKind = ShapeKind.SCRIM_BOTTOM
+                                                                    ).toMap(),
+                                                                    DesignLayer(
+                                                                        layerId = "prof_avatar",
+                                                                        type = LayerType.IMAGE,
+                                                                        name = "Foto da Conta",
+                                                                        xFraction = 0.12f,
+                                                                        yFraction = 0.085f,
+                                                                        widthFraction = 0.105f,
+                                                                        heightFraction = 0.085f,
+                                                                        imageUri = TemplateSeedCatalog.TOKEN_USER_AVATAR,
+                                                                        maskKind = ImageMaskKind.CIRCLE
+                                                                    ).toMap(),
+                                                                    DesignLayer(
+                                                                        layerId = "prof_handle",
+                                                                        type = LayerType.TEXT,
+                                                                        name = "Perfil Criador",
+                                                                        xFraction = 0.35f,
+                                                                        yFraction = 0.085f,
+                                                                        widthFraction = 0.32f,
+                                                                        heightFraction = 0.045f,
+                                                                        text = TemplateSeedCatalog.TOKEN_USER_HANDLE,
+                                                                        fontFamilyKey = "plus_jakarta_sans",
+                                                                        fontSizeSp = 12f,
+                                                                        colorHex = "#FFFFFF",
+                                                                        bold = true,
+                                                                        textAlign = "left"
+                                                                    ).toMap(),
+                                                                    DesignLayer(
+                                                                        layerId = "prof_verified",
+                                                                        type = LayerType.SHAPE,
+                                                                        name = "Selo Verificado",
+                                                                        xFraction = 0.54f,
+                                                                        yFraction = 0.085f,
+                                                                        widthFraction = 0.048f,
+                                                                        heightFraction = 0.042f,
+                                                                        colorHex = "#1D9BF0",
+                                                                        shapeKind = ShapeKind.VERIFIED_BADGE
+                                                                    ).toMap(),
+                                                                    DesignLayer(
+                                                                        layerId = "ai_txt_${UUID.randomUUID().toString().take(6)}",
+                                                                        type = LayerType.TEXT,
+                                                                        name = "Título Editável",
+                                                                        xFraction = 0.5f,
+                                                                        yFraction = 0.80f,
+                                                                        widthFraction = 0.86f,
+                                                                        heightFraction = 0.20f,
+                                                                        text = titleText.uppercase(),
+                                                                        fontFamilyKey = "plus_jakarta_sans",
+                                                                        fontSizeSp = 30f,
+                                                                        colorHex = "#FFFFFF",
+                                                                        bold = true,
+                                                                        shadowEnabled = true
+                                                                    ).toMap()
+                                                                ),
+                                                                fontsUsed = listOf("plus_jakarta_sans"),
+                                                                colorsUsed = listOf("#0A1628", "#FF7A00", "#FFFFFF"),
+                                                                premium = false,
+                                                                published = true
+                                                            )
+                                                            onSaveAsTemplate(tpl)
+                                                        }
+                                                    },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .testTag("ai_image_save_template_button")
+                                                ) {
+                                                    Icon(Icons.Filled.BookmarkAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text("Guardar Imagem como Template")
                                                 }
                                             }
                                         }

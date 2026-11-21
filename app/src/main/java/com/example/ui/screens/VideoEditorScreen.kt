@@ -1,30 +1,26 @@
 package com.example.ui.screens
 
+import android.Manifest
 import android.content.Intent
-import android.graphics.BitmapFactory
-import android.graphics.ImageDecoder
+import android.content.pm.PackageManager
 import android.media.MediaMetadataRetriever
 import android.net.Uri
-import android.os.Build
-import android.view.ViewGroup
-import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,40 +28,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.AddPhotoAlternate
-import androidx.compose.material.icons.filled.Animation
-import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.ContentCut
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Filter
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.VideoCall
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -77,17 +47,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -96,20 +67,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -117,41 +82,40 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.example.core.audio.LocalSoundEffects
 import com.example.core.model.DesignProject
+import com.example.core.model.ProAudioTrack
+import com.example.core.model.ProOverlayItem
+import com.example.core.model.SpeedCurvePreset
+import com.example.core.model.TemplateSeedCatalog
+import com.example.core.model.VideoBackgroundAnimatedStyle
 import com.example.core.model.VideoClipItem
-import com.example.core.model.VideoFilterKind
-import com.example.core.model.VideoTextOverlay
+import com.example.core.model.VideoEditorSnapshot
+import com.example.core.model.VideoExportQuality
+import com.example.core.model.VideoOverlayKind
 import com.example.core.model.VideoTransitionKind
 import com.example.data.repository.AiStudioRepository
+import com.example.engine.audio.VideoAudioStudioEngine
+import com.example.engine.audio.VideoAudioTrackMixer
+import com.example.engine.audio.VoiceRecorderController
 import com.example.engine.graphics.BitmapRenderer
 import com.example.engine.graphics.ExportedFileResult
+import com.example.engine.video.ImportedFontInfo
+import com.example.engine.video.VideoAutosaveStore
 import com.example.engine.video.VideoExportEngine
+import com.example.engine.video.VideoProProcessors
 import com.example.engine.video.VideoResolutionPreset
-import com.example.ui.components.parseComposeColor
+import com.example.ui.components.VideoPreviewCanvas
+import com.example.ui.components.VideoTimelineView
 import com.example.ui.theme.CyanGlow
 import com.example.ui.theme.NavyDeep
 import com.example.ui.theme.OrangeAccent
-import com.example.ui.theme.OrangeBright
 import com.example.ui.theme.SuccessGreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
-
-private enum class VideoToolTab(val label: String, val icon: ImageVector) {
-    CLIP("Cortar", Icons.Filled.ContentCut),
-    BACKGROUND("Fundo", Icons.Filled.Palette),
-    AUDIO("Música", Icons.Filled.MusicNote),
-    TEXT("Texto", Icons.Filled.Subtitles),
-    FILTER("Filtros", Icons.Filled.Filter),
-    TRANSITION("Transição", Icons.Filled.SwapHoriz),
-    FORMAT("Formato", Icons.Filled.AspectRatio)
-}
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -170,52 +134,142 @@ fun VideoEditorScreen(
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val sound = LocalSoundEffects.current
     val lifecycleOwner = LocalLifecycleOwner.current
+
     val exportEngine = remember(context) { VideoExportEngine(context) }
     val aiRepository = remember { AiStudioRepository() }
+    val audioMixer = remember(context) { VideoAudioTrackMixer(context) }
+    val voiceRecorder = remember(context) { VoiceRecorderController(context) }
 
-    var projectTitle by remember(initialProject.id) { mutableStateOf(initialProject.title) }
-    val clips = remember(initialProject.id) {
-        mutableStateListOf<VideoClipItem>().apply {
-            addAll(initialProject.videoClips.map { VideoClipItem.fromMap(it) })
-        }
+    val draftKey = remember(initialProject.id) { initialProject.id.ifBlank { "new_video_draft" } }
+
+    var projectTitle by remember(initialProject) { mutableStateOf(initialProject.title) }
+    var aspectRatio by remember(initialProject) {
+        mutableStateOf(inferVideoAspectRatio(initialProject.width, initialProject.height))
     }
-    val textOverlays = remember { mutableStateListOf<VideoTextOverlay>() }
-    var selectedClipIndex by remember { mutableIntStateOf(0) }
-    var audioUri by remember { mutableStateOf<String?>(null) }
-    var audioTitle by remember { mutableStateOf("Sem faixa de áudio") }
-    var audioMuted by remember { mutableStateOf(false) }
-    var aspectRatio by remember { mutableStateOf("9:16") }
-    var activeTab by remember { mutableStateOf(VideoToolTab.CLIP) }
-    var toolsExpanded by remember { mutableStateOf(true) }
-    var fullscreenPreview by remember { mutableStateOf(false) }
-
-    var bgColorStart by remember(initialProject.id) {
+    var bgColorStart by remember(initialProject) {
         mutableStateOf(initialProject.backgroundColorHex.ifBlank { "#0A1628" })
     }
-    var bgColorEnd by remember(initialProject.id) {
-        mutableStateOf(initialProject.backgroundGradientHex)
-    }
-    var bgImageUri by remember(initialProject.id) {
+    var bgColorEnd by remember(initialProject) { mutableStateOf(initialProject.backgroundGradientHex) }
+    var bgImageUri by remember(initialProject) {
         mutableStateOf(
             initialProject.layers.firstOrNull { it["layerId"] == "video_bg_image" }?.get("imageUri") as? String
         )
     }
+    var animatedBgStyle by remember(initialProject) {
+        val rawStyle = initialProject.layers.firstOrNull { it["layerId"] == "video_bg_settings" }
+            ?.get("animatedBgStyle") as? String
+        mutableStateOf(
+            enumValues<VideoBackgroundAnimatedStyle>().firstOrNull { it.name == rawStyle }
+                ?: VideoBackgroundAnimatedStyle.NONE
+        )
+    }
+
+    val clips = remember(initialProject) {
+        mutableStateListOf<VideoClipItem>().apply {
+            addAll(initialProject.videoClips.map { VideoClipItem.fromMap(it) })
+        }
+    }
+    val audioTracks = remember(initialProject) {
+        mutableStateListOf<ProAudioTrack>().apply {
+            initialProject.layers.filter { it["type"] == "AUDIO_TRACK" }.forEach { map ->
+                add(ProAudioTrack.fromLayerMap(map))
+            }
+        }
+    }
+    val overlays = remember(initialProject) {
+        mutableStateListOf<ProOverlayItem>().apply {
+            initialProject.layers
+                .filter {
+                    val id = it["layerId"] as? String
+                    val type = it["type"] as? String
+                    id != "video_bg_image" && id != "video_bg_settings" && type != "AUDIO_TRACK"
+                }
+                .forEach { map ->
+                    add(ProOverlayItem.fromLayerMap(map))
+                }
+        }
+    }
+    val importedFonts = remember { mutableStateListOf<ImportedFontInfo>() }
+
+    // Selection & UI state
+    var selectedClipIndex by remember(initialProject) { mutableIntStateOf(0) }
+    var multiSelectMode by remember { mutableStateOf(false) }
+    var selectedClipIndices by remember { mutableStateOf(emptySet<Int>()) }
+    var selectedAudioId by remember { mutableStateOf<String?>(null) }
+    var selectedOverlayId by remember { mutableStateOf<String?>(null) }
+    var activeTab by remember { mutableStateOf(ProVideoToolTab.EDIT) }
+    var toolsExpanded by remember { mutableStateOf(true) }
+    var fullscreenPreview by remember { mutableStateOf(false) }
+    var timelineZoom by remember { mutableFloatStateOf(1.0f) }
+    var snapEnabled by remember { mutableStateOf(true) }
+    var isReplacingClip by remember { mutableStateOf(false) }
+
+    // Undo / Redo Stacks
+    val undoStack = remember(initialProject) { mutableStateListOf<VideoEditorSnapshot>() }
+    val redoStack = remember(initialProject) { mutableStateListOf<VideoEditorSnapshot>() }
+
+    fun captureSnapshot() = VideoEditorSnapshot(
+        clips = clips.toList(),
+        audioTracks = audioTracks.toList(),
+        overlays = overlays.toList(),
+        aspectRatio = aspectRatio,
+        bgColorStart = bgColorStart,
+        bgColorEnd = bgColorEnd,
+        bgImageUri = bgImageUri,
+        animatedBgStyle = animatedBgStyle
+    )
+
+    fun pushUndo() {
+        undoStack.add(captureSnapshot())
+        if (undoStack.size > 25) undoStack.removeAt(0)
+        redoStack.clear()
+    }
+
+    fun restoreSnapshot(snap: VideoEditorSnapshot) {
+        clips.clear(); clips.addAll(snap.clips)
+        audioTracks.clear(); audioTracks.addAll(snap.audioTracks)
+        overlays.clear(); overlays.addAll(snap.overlays)
+        aspectRatio = snap.aspectRatio
+        bgColorStart = snap.bgColorStart
+        bgColorEnd = snap.bgColorEnd
+        bgImageUri = snap.bgImageUri
+        animatedBgStyle = snap.animatedBgStyle
+        selectedClipIndex = selectedClipIndex.coerceIn(0, (clips.size - 1).coerceAtLeast(0))
+    }
+
+    // Recovery draft check
+    var pendingRecovery by remember(initialProject) { mutableStateOf<VideoAutosaveStore.RecoveredDraft?>(null) }
+    LaunchedEffect(draftKey) {
+        val draft = withContext(Dispatchers.IO) { VideoAutosaveStore.loadDraft(context, draftKey) }
+        if (draft != null && (draft.snapshot.clips.isNotEmpty() || draft.snapshot.audioTracks.isNotEmpty() || draft.snapshot.overlays.isNotEmpty())) {
+            val savedUpdatedMs = initialProject.updatedAt?.toDate()?.time ?: 0L
+            if (draft.savedAtMs > savedUpdatedMs + 5_000L) {
+                pendingRecovery = draft
+            }
+        }
+    }
+
+    // Playback, Audio Mixer, Voice Recording, AI & Export states
+    var isPlaying by remember(initialProject) { mutableStateOf(false) }
+    var currentPosMs by remember(initialProject) { mutableLongStateOf(0L) }
+    var totalDurationMs by remember(initialProject) { mutableLongStateOf(0L) }
+    var previewingAudioUri by remember { mutableStateOf<String?>(null) }
+    var isRecordingVoice by remember { mutableStateOf(false) }
+    var micLevel by remember { mutableFloatStateOf(0.1f) }
     var aiBusy by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
 
-    var isPlaying by remember { mutableStateOf(false) }
-    var currentPosMs by remember { mutableStateOf(0L) }
-    var totalDurationMs by remember { mutableStateOf(0L) }
-
+    // Export state
     var showExportModal by remember { mutableStateOf(false) }
+    var exportRes by remember { mutableStateOf(VideoResolutionPreset.FHD_1080) }
+    var exportFps by remember { mutableIntStateOf(30) }
+    var exportQuality by remember { mutableStateOf(VideoExportQuality.HIGH) }
     var isExporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableIntStateOf(0) }
     var activeExportId by remember { mutableStateOf<String?>(null) }
     var exportedResult by remember { mutableStateOf<ExportedFileResult?>(null) }
-
-    var showTextDialog by remember { mutableStateOf(false) }
-    var newOverlayText by remember { mutableStateOf("") }
-    var newOverlaySubtitle by remember { mutableStateOf(false) }
 
     val exoPlayer = remember(context) {
         ExoPlayer.Builder(context).build().apply {
@@ -223,12 +277,19 @@ fun VideoEditorScreen(
         }
     }
 
-    // Lifecycle & cleanup
-    DisposableEffect(lifecycleOwner, exoPlayer) {
+    // Lifecycle cleanup
+    DisposableEffect(lifecycleOwner, exoPlayer, audioMixer, voiceRecorder) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) {
                 exoPlayer.pause()
                 isPlaying = false
+                audioMixer.updatePlayback(audioTracks.toList(), currentPosMs, false)
+                audioMixer.stopSinglePreview()
+                previewingAudioUri = null
+                if (isRecordingVoice) {
+                    voiceRecorder.stopAndDiscard()
+                    isRecordingVoice = false
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -236,61 +297,183 @@ fun VideoEditorScreen(
             lifecycleOwner.lifecycle.removeObserver(observer)
             exportEngine.cancelExport()
             exoPlayer.release()
+            audioMixer.releaseAll()
+            voiceRecorder.stopAndDiscard()
         }
     }
 
-    // Sync playlist with ExoPlayer whenever clips change
-    LaunchedEffect(clips.toList(), audioMuted) {
+    // Local Autosave (debounced 1.5s)
+    LaunchedEffect(
+        clips.toList(),
+        audioTracks.toList(),
+        overlays.toList(),
+        aspectRatio,
+        bgColorStart,
+        bgColorEnd,
+        bgImageUri,
+        animatedBgStyle,
+        projectTitle
+    ) {
+        delay(1500L)
+        if (clips.isNotEmpty() || audioTracks.isNotEmpty() || overlays.isNotEmpty()) {
+            val snap = captureSnapshot()
+            withContext(Dispatchers.IO) {
+                VideoAutosaveStore.saveDraft(context, draftKey, projectTitle, snap)
+            }
+        }
+    }
+
+    // Sync Audio Mixer whenever tracks change
+    LaunchedEffect(audioTracks.toList()) {
+        audioMixer.syncTracks(audioTracks.toList())
+        if (selectedAudioId == null && audioTracks.isNotEmpty()) {
+            selectedAudioId = audioTracks.first().id
+        }
+    }
+
+    // Helper to compute active clip index and relative progress from currentPosMs
+    fun resolveClipTimingAt(posMs: Long): Triple<Int, Long, Float> {
+        if (clips.isEmpty()) return Triple(0, 0L, 0f)
+        var acc = 0L
+        for (i in clips.indices) {
+            val c = clips[i]
+            val cDur = ((c.trimEndMs - c.trimStartMs).coerceAtLeast(1000L) / c.speed.coerceIn(0.25f, 4f)).toLong().coerceAtLeast(400L)
+            if (posMs < acc + cDur || i == clips.lastIndex) {
+                val rel = (posMs - acc).coerceIn(0L, cDur)
+                val prog = (rel.toFloat() / cDur.toFloat()).coerceIn(0f, 1f)
+                return Triple(i, rel, prog)
+            }
+            acc += cDur
+        }
+        return Triple(0, 0L, 0f)
+    }
+
+    // Sync ExoPlayer playlist with video clips
+    LaunchedEffect(clips.toList()) {
         val videoClipsOnly = clips.filter { it.mediaType == "video" }
         if (videoClipsOnly.isNotEmpty()) {
-            val mediaItems = videoClipsOnly.map { clip ->
-                val builder = MediaItem.Builder().setUri(Uri.parse(clip.uriString))
+            val items = videoClipsOnly.map { clip ->
+                val uri = TemplateSeedCatalog.resolvePlayableUri(context, clip.uriString) ?: Uri.parse(clip.uriString)
+                val b = MediaItem.Builder().setUri(uri)
                 if (clip.trimEndMs > clip.trimStartMs) {
-                    builder.setClippingConfiguration(
+                    b.setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder()
                             .setStartPositionMs(clip.trimStartMs.coerceAtLeast(0L))
                             .setEndPositionMs(clip.trimEndMs)
                             .build()
                     )
                 }
-                builder.build()
+                b.build()
             }
-            exoPlayer.setMediaItems(mediaItems)
+            exoPlayer.setMediaItems(items)
             exoPlayer.prepare()
-            val selected = clips.getOrNull(selectedClipIndex)
-            exoPlayer.volume = if (audioMuted || selected?.muted == true) 0f else (selected?.volume ?: 1f)
-            exoPlayer.setPlaybackSpeed(selected?.speed ?: 1f)
         } else {
             exoPlayer.clearMediaItems()
         }
-        totalDurationMs = clips.sumOf { (it.trimEndMs - it.trimStartMs).coerceAtLeast(1000L) }
-    }
-
-    LaunchedEffect(isPlaying) {
-        while (isPlaying) {
-            currentPosMs = exoPlayer.currentPosition.coerceAtLeast(0L)
-            delay(250L)
+        totalDurationMs = clips.sumOf {
+            ((it.trimEndMs - it.trimStartMs).coerceAtLeast(1000L) / it.speed.coerceIn(0.25f, 4f)).toLong()
         }
     }
 
-    // Pickers
+    // Dynamic playback loop: updates timeline playhead, Speed Curves, ExoPlayer volume/speed, and Multi-Track Audio Mixer!
+    LaunchedEffect(isPlaying, clips.toList(), audioTracks.toList()) {
+        while (isPlaying) {
+            val total = totalDurationMs.coerceAtLeast(1000L)
+            val (clipIdx, relMs, clipProg) = resolveClipTimingAt(currentPosMs)
+            val clip = clips.getOrNull(clipIdx)
+
+            if (clip != null) {
+                val curve = SpeedCurvePreset.entries.firstOrNull { it.key == clip.speedCurve } ?: SpeedCurvePreset.LINEAR
+                val dynamicSpeed = (clip.speed * curve.speedMultiplierAt(clipProg)).coerceIn(0.25f, 4f)
+                if (clip.mediaType == "video") {
+                    exoPlayer.volume = if (clip.muted) 0f else clip.volume.coerceIn(0f, 1f)
+                    exoPlayer.setPlaybackSpeed(dynamicSpeed)
+                    if (!exoPlayer.isPlaying && exoPlayer.mediaItemCount > 0) {
+                        val videoIdx = clips.take(clipIdx + 1).count { it.mediaType == "video" } - 1
+                        if (videoIdx >= 0 && videoIdx < exoPlayer.mediaItemCount) {
+                            exoPlayer.seekTo(videoIdx, (relMs * dynamicSpeed).toLong())
+                            exoPlayer.play()
+                        }
+                    }
+                } else if (exoPlayer.isPlaying) {
+                    exoPlayer.pause()
+                }
+                selectedClipIndex = clipIdx
+            }
+
+            audioMixer.updatePlayback(audioTracks.toList(), currentPosMs, true)
+            delay(80L)
+            val next = currentPosMs + 80L
+            currentPosMs = if (next >= total) {
+                audioMixer.seekAllTo(audioTracks.toList(), 0L)
+                if (clips.any { it.mediaType == "video" }) exoPlayer.seekTo(0, 0L)
+                0L
+            } else next
+        }
+        exoPlayer.pause()
+        audioMixer.updatePlayback(audioTracks.toList(), currentPosMs, false)
+    }
+
+    // Mic amplitude polling while recording voiceover
+    LaunchedEffect(isRecordingVoice) {
+        while (isRecordingVoice) {
+            micLevel = voiceRecorder.readAmplitudeNormalized()
+            delay(70L)
+        }
+    }
+
+    fun seekTimelineTo(ms: Long) {
+        val safeMs = ms.coerceIn(0L, totalDurationMs.coerceAtLeast(1000L))
+        currentPosMs = safeMs
+        val (idx, relMs, _) = resolveClipTimingAt(safeMs)
+        selectedClipIndex = idx
+        val clip = clips.getOrNull(idx)
+        if (clip?.mediaType == "video") {
+            val videoIdx = clips.take(idx + 1).count { it.mediaType == "video" } - 1
+            if (videoIdx >= 0 && videoIdx < exoPlayer.mediaItemCount) {
+                exoPlayer.seekTo(videoIdx, (relMs * clip.speed).toLong())
+            }
+        }
+        audioMixer.seekAllTo(audioTracks.toList(), safeMs)
+    }
+
+    // Activity Launchers
     val pickVideoLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            val dur = extractVideoDurationMs(context, uri).coerceAtLeast(2000L)
-            clips.add(
-                VideoClipItem(
-                    clipId = "vc_${UUID.randomUUID().toString().take(8)}",
-                    title = "Vídeo ${clips.size + 1}",
-                    uriString = uri.toString(),
-                    mediaType = "video",
-                    durationMs = dur,
-                    trimStartMs = 0L,
-                    trimEndMs = dur
-                )
-            )
-            selectedClipIndex = clips.lastIndex
+            scope.launch {
+                val dur = withContext(Dispatchers.IO) { extractVideoDurationMs(context, uri).coerceAtLeast(1500L) }
+                pushUndo()
+                if (isReplacingClip && clips.getOrNull(selectedClipIndex) != null) {
+                    val old = clips[selectedClipIndex]
+                    clips[selectedClipIndex] = old.copy(
+                        uriString = uri.toString(),
+                        mediaType = "video",
+                        durationMs = dur,
+                        trimStartMs = 0L,
+                        trimEndMs = dur,
+                        reversed = false
+                    )
+                    isReplacingClip = false
+                    onShowMessage("Clipe substituído!")
+                } else {
+                    clips.add(
+                        VideoClipItem(
+                            clipId = "vc_${UUID.randomUUID().toString().take(8)}",
+                            title = "Vídeo ${clips.size + 1}",
+                            uriString = uri.toString(),
+                            mediaType = "video",
+                            durationMs = dur,
+                            trimStartMs = 0L,
+                            trimEndMs = dur
+                        )
+                    )
+                    selectedClipIndex = clips.lastIndex
+                }
+            }
+        } else {
+            isReplacingClip = false
         }
     }
 
@@ -298,18 +481,35 @@ fun VideoEditorScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            clips.add(
-                VideoClipItem(
-                    clipId = "img_${UUID.randomUUID().toString().take(8)}",
-                    title = "Foto ${clips.size + 1}",
+            pushUndo()
+            if (isReplacingClip && clips.getOrNull(selectedClipIndex) != null) {
+                val old = clips[selectedClipIndex]
+                clips[selectedClipIndex] = old.copy(
                     uriString = uri.toString(),
                     mediaType = "image",
                     durationMs = 4000L,
                     trimStartMs = 0L,
-                    trimEndMs = 4000L
+                    trimEndMs = 4000L,
+                    reversed = false
                 )
-            )
-            selectedClipIndex = clips.lastIndex
+                isReplacingClip = false
+                onShowMessage("Clipe substituído por foto!")
+            } else {
+                clips.add(
+                    VideoClipItem(
+                        clipId = "img_${UUID.randomUUID().toString().take(8)}",
+                        title = "Foto ${clips.size + 1}",
+                        uriString = uri.toString(),
+                        mediaType = "image",
+                        durationMs = 4000L,
+                        trimStartMs = 0L,
+                        trimEndMs = 4000L
+                    )
+                )
+                selectedClipIndex = clips.lastIndex
+            }
+        } else {
+            isReplacingClip = false
         }
     }
 
@@ -317,13 +517,72 @@ fun VideoEditorScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (_: Exception) {
+            scope.launch {
+                VideoAudioStudioEngine.importAudioFromDevice(context, uri, currentPosMs).fold(
+                    onSuccess = { trk ->
+                        pushUndo()
+                        audioTracks.add(trk)
+                        selectedAudioId = trk.id
+                        sound?.playSuccess()
+                        onShowMessage("Áudio '${trk.title}' importado para a timeline!")
+                    },
+                    onFailure = { err ->
+                        onShowMessage(err.localizedMessage ?: "Não foi possível importar este áudio.")
+                    }
+                )
             }
-            audioUri = uri.toString()
-            audioTitle = uri.lastPathSegment?.substringAfterLast('/') ?: "Áudio selecionado"
-            onShowMessage("Música adicionada ao projeto!")
+        }
+    }
+
+    val pickOverlayImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            pushUndo()
+            val ov = ProOverlayItem(
+                kind = VideoOverlayKind.IMAGE,
+                title = "Imagem Camada",
+                uriString = uri.toString(),
+                startMs = currentPosMs,
+                endMs = (currentPosMs + 5000L).coerceAtLeast(currentPosMs + 1500L)
+            )
+            overlays.add(ov)
+            selectedOverlayId = ov.id
+            onShowMessage("Imagem adicionada como camada!")
+        }
+    }
+
+    val pickOverlayVideoPipLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                val frame = withContext(Dispatchers.IO) {
+                    val ret = MediaMetadataRetriever()
+                    try {
+                        ret.setDataSource(context, uri)
+                        ret.getFrameAtTime(500_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    } catch (_: Exception) {
+                        null
+                    } finally {
+                        try { ret.release() } catch (_: Exception) {}
+                    }
+                }
+                val thumbUri = if (frame != null) {
+                    BitmapRenderer.saveBitmapToTempUri(context, frame, "pip_thumb").toString()
+                } else uri.toString()
+                pushUndo()
+                val ov = ProOverlayItem(
+                    kind = VideoOverlayKind.VIDEO_PIP,
+                    title = "Vídeo PiP",
+                    uriString = thumbUri,
+                    startMs = currentPosMs,
+                    endMs = (currentPosMs + 6000L).coerceAtLeast(currentPosMs + 1500L)
+                )
+                overlays.add(ov)
+                selectedOverlayId = ov.id
+                onShowMessage("Sobreposição PiP adicionada!")
+            }
         }
     }
 
@@ -331,83 +590,709 @@ fun VideoEditorScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (_: Exception) {
-            }
+            pushUndo()
             bgImageUri = uri.toString()
-            onShowMessage("Imagem de fundo do vídeo aplicada!")
+            onShowMessage("Imagem de fundo aplicada!")
         }
     }
 
-    val selectedClip = clips.getOrNull(selectedClipIndex)
+    val pickCustomFontLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                VideoProProcessors.importCustomFontFile(context, uri).fold(
+                    onSuccess = { info ->
+                        importedFonts.add(info)
+                        val selOv = overlays.firstOrNull { it.id == selectedOverlayId }
+                        if (selOv != null) {
+                            val idx = overlays.indexOf(selOv)
+                            if (idx >= 0) overlays[idx] = selOv.copy(customFontUri = info.fileUri)
+                        }
+                        onShowMessage("Fonte '${info.name}' importada!")
+                    },
+                    onFailure = { onShowMessage(it.localizedMessage ?: "Selecione um ficheiro .ttf ou .otf válido.") }
+                )
+            }
+        }
+    }
 
-    fun runAiBackgroundRemovalOnClip() {
+    fun startOrStopVoiceRecording() {
+        if (isRecordingVoice) {
+            scope.launch {
+                voiceRecorder.stopRecordingAndCreateTrack(currentPosMs).fold(
+                    onSuccess = { trk ->
+                        pushUndo()
+                        audioTracks.add(trk)
+                        selectedAudioId = trk.id
+                        sound?.playSuccess()
+                        onShowMessage("Locução adicionada à timeline!")
+                    },
+                    onFailure = { onShowMessage(it.localizedMessage ?: "Falha na gravação de voz.") }
+                )
+                isRecordingVoice = false
+            }
+        } else {
+            val res = voiceRecorder.startRecording()
+            if (res.isSuccess) {
+                isRecordingVoice = true
+            } else {
+                onShowMessage(res.exceptionOrNull()?.localizedMessage ?: "Não foi possível abrir o microfone.")
+            }
+        }
+    }
+
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startOrStopVoiceRecording()
+        else onShowMessage("Permissão de microfone necessária para gravar voz.")
+    }
+
+    fun toggleVoiceRecordingWithPermission() {
+        if (isRecordingVoice) {
+            startOrStopVoiceRecording()
+            return
+        }
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (granted) startOrStopVoiceRecording()
+        else recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    // Real AI Studio Runners
+    fun runAiBgRemovalOrCutout(isSmartCutout: Boolean) {
         val clip = clips.getOrNull(selectedClipIndex)
         if (clip == null) {
-            onShowMessage("Selecione primeiro uma foto ou clipe na linha do tempo.")
+            onShowMessage("Selecione primeiro um clipe ou foto na timeline.")
             return
         }
         aiBusy = true
         scope.launch {
             try {
-                val srcBitmap = withContext(Dispatchers.IO) {
-                    if (clip.mediaType == "image") {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                            val src = ImageDecoder.createSource(context.contentResolver, Uri.parse(clip.uriString))
-                            ImageDecoder.decodeBitmap(src) { dec, _, _ -> dec.isMutableRequired = true }
-                        } else {
-                            context.contentResolver.openInputStream(Uri.parse(clip.uriString))?.use {
-                                BitmapFactory.decodeStream(it)
-                            }
-                        }
-                    } else {
-                        val retriever = MediaMetadataRetriever()
-                        try {
-                            retriever.setDataSource(context, Uri.parse(clip.uriString))
-                            val frameTimeUs = (clip.trimStartMs.coerceAtLeast(0L) + 500L) * 1000L
-                            retriever.getFrameAtTime(frameTimeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                        } finally {
-                            try { retriever.release() } catch (_: Exception) {}
-                        }
-                    }
-                } ?: throw IllegalStateException("Não foi possível obter a imagem do clipe selecionado.")
-
-                aiRepository.editOrRemoveBackground(
-                    srcBitmap,
-                    "Remove the background cleanly and isolate the main subject on a clean transparent backdrop."
-                ).fold(
+                val (_, relMs, _) = resolveClipTimingAt(currentPosMs)
+                val frame = VideoProProcessors.extractFrameAtMs(context, clip, relMs, 720)
+                    ?: throw IllegalStateException("Não foi possível obter fotograma deste clipe.")
+                val instruction = if (isSmartCutout) {
+                    "Cut out the primary person or focal object cleanly with crisp edges and make the background pure solid #00FF00 green screen."
+                } else {
+                    "Remove the background cleanly and isolate the main subject on a pure solid #00FF00 backdrop."
+                }
+                aiRepository.editOrRemoveBackground(frame, instruction).fold(
                     onSuccess = { outBmp ->
-                        val outUri = BitmapRenderer.saveBitmapToTempUri(context, outBmp, "vid_nobg")
-                        if (clip.mediaType == "image") {
+                        val keyed = withContext(Dispatchers.IO) {
+                            VideoProProcessors.applyChromaKeyToBitmap(outBmp, "#00FF00", 0.36f)
+                        }
+                        val outUri = BitmapRenderer.saveBitmapToTempUri(context, keyed, "ai_cutout")
+                        outBmp.recycle()
+                        keyed.recycle()
+                        pushUndo()
+                        if (isSmartCutout) {
+                            val ov = ProOverlayItem(
+                                kind = VideoOverlayKind.IMAGE,
+                                title = "Recorte Inteligente IA",
+                                uriString = outUri.toString(),
+                                startMs = currentPosMs,
+                                endMs = (currentPosMs + 5000L).coerceAtLeast(currentPosMs + 1500L)
+                            )
+                            overlays.add(ov)
+                            selectedOverlayId = ov.id
+                            activeTab = ProVideoToolTab.LAYERS
+                            onShowMessage("Recorte inteligente adicionado como camada!")
+                        } else if (clip.mediaType == "image") {
                             clips[selectedClipIndex] = clip.copy(uriString = outUri.toString())
+                            onShowMessage("Fundo removido com IA!")
                         } else {
                             clips.add(
                                 selectedClipIndex + 1,
-                                VideoClipItem(
+                                clip.copy(
                                     clipId = "cut_${UUID.randomUUID().toString().take(6)}",
-                                    title = "${clip.title} (Recorte IA)",
+                                    title = "${clip.title} (Sem Fundo IA)",
                                     uriString = outUri.toString(),
                                     mediaType = "image",
-                                    durationMs = (clip.trimEndMs - clip.trimStartMs).coerceIn(2000L, 6000L),
+                                    durationMs = 4000L,
                                     trimStartMs = 0L,
-                                    trimEndMs = (clip.trimEndMs - clip.trimStartMs).coerceIn(2000L, 6000L),
-                                    filter = clip.filter
+                                    trimEndMs = 4000L
                                 )
                             )
                             selectedClipIndex += 1
+                            onShowMessage("Fotograma sem fundo adicionado!")
                         }
-                        onShowMessage("Fundo removido com IA!")
                     },
-                    onFailure = { err ->
-                        onShowMessage(err.localizedMessage ?: "Erro ao remover fundo com IA.")
-                    }
+                    onFailure = { onShowMessage(it.localizedMessage ?: "Erro ao processar com IA.") }
                 )
             } catch (e: Exception) {
-                onShowMessage(e.localizedMessage ?: "Erro ao processar fundo.")
+                onShowMessage(e.localizedMessage ?: "Erro ao processar fotograma.")
             } finally {
                 aiBusy = false
             }
+        }
+    }
+
+    fun runAiAutoCaptions(topic: String) {
+        aiBusy = true
+        scope.launch {
+            try {
+                val clip = clips.getOrNull(selectedClipIndex)
+                val frame = clip?.let { VideoProProcessors.extractFrameAtMs(context, it, 500L, 512) }
+                val dur = totalDurationMs.coerceAtLeast(5000L)
+                aiRepository.generateAutoCaptions(topic, dur, frame).fold(
+                    onSuccess = { segments ->
+                        pushUndo()
+                        segments.forEachIndexed { idx, seg ->
+                            overlays.add(
+                                ProOverlayItem(
+                                    kind = VideoOverlayKind.SUBTITLE,
+                                    title = "Legenda IA ${idx + 1}",
+                                    text = seg.text,
+                                    startMs = seg.startMs,
+                                    endMs = seg.endMs,
+                                    yFraction = 0.80f,
+                                    fontSizeSp = 19f,
+                                    bgColorHex = "#B3000000"
+                                )
+                            )
+                        }
+                        sound?.playSuccess()
+                        onShowMessage("${segments.size} legendas automáticas criadas com IA!")
+                    },
+                    onFailure = { onShowMessage(it.localizedMessage ?: "Erro ao gerar legendas IA.") }
+                )
+            } finally {
+                aiBusy = false
+            }
+        }
+    }
+
+    fun runAiFrameAnalysis(goal: String) {
+        val clip = clips.getOrNull(selectedClipIndex)
+        if (clip == null) {
+            onShowMessage("Selecione primeiro um clipe na timeline.")
+            return
+        }
+        aiBusy = true
+        scope.launch {
+            try {
+                val (_, relMs, _) = resolveClipTimingAt(currentPosMs)
+                val frame = VideoProProcessors.extractFrameAtMs(context, clip, relMs, 512)
+                    ?: throw IllegalStateException("Não foi possível analisar este clipe.")
+                aiRepository.analyzeVideoFrameForProAi(frame, goal).fold(
+                    onSuccess = { res ->
+                        pushUndo()
+                        val updated = when (goal) {
+                            "track_object" -> clip.copy(
+                                motionTrackX = res.targetX,
+                                motionTrackY = res.targetY,
+                                offsetX = ((0.5f - res.targetX) * 0.4f).coerceIn(-0.4f, 0.4f),
+                                offsetY = ((0.5f - res.targetY) * 0.4f).coerceIn(-0.4f, 0.4f),
+                                zoomScale = clip.zoomScale.coerceAtLeast(1.18f)
+                            )
+                            "smart_slowmo" -> clip.copy(
+                                speed = res.recommendedSpeed,
+                                speedCurve = res.speedCurve
+                            )
+                            else -> clip.copy(
+                                brightness = res.brightness,
+                                contrast = res.contrast,
+                                saturation = res.saturation,
+                                temperature = res.temperature,
+                                sharpness = 0.25f
+                            )
+                        }
+                        clips[selectedClipIndex] = updated
+                        sound?.playSuccess()
+                        onShowMessage(res.summary)
+                    },
+                    onFailure = { onShowMessage(it.localizedMessage ?: "Erro na análise IA.") }
+                )
+            } catch (e: Exception) {
+                onShowMessage(e.localizedMessage ?: "Erro IA.")
+            } finally {
+                aiBusy = false
+            }
+        }
+    }
+
+    fun saveProjectNow() {
+        val currentBgUri = bgImageUri
+        val savedLayers = buildList {
+            if (currentBgUri != null) {
+                add(
+                    mapOf(
+                        "layerId" to "video_bg_image",
+                        "type" to "IMAGE",
+                        "name" to "Fundo Vídeo",
+                        "imageUri" to currentBgUri
+                    )
+                )
+            }
+            add(
+                mapOf(
+                    "layerId" to "video_bg_settings",
+                    "type" to "IMAGE",
+                    "name" to "Config Fundo",
+                    "animatedBgStyle" to animatedBgStyle.name
+                )
+            )
+            audioTracks.forEach { add(it.toLayerMap()) }
+            overlays.forEach { add(it.toLayerMap()) }
+        }.take(60) // Enforced strictly <= 60 per firestore.rules
+
+        val (saveW, saveH) = videoDimensionsForAspect(aspectRatio)
+        sound?.playSuccess()
+        onSaveToCloud(
+            initialProject.copy(
+                title = projectTitle,
+                formatName = "Vídeo $aspectRatio",
+                width = saveW,
+                height = saveH,
+                backgroundColorHex = bgColorStart,
+                backgroundGradientHex = bgColorEnd,
+                layers = savedLayers,
+                videoClips = clips.take(20).map { it.toMap() },
+                projectType = "video"
+            )
+        )
+    }
+
+    val (_, _, currentClipProgress) = resolveClipTimingAt(currentPosMs)
+    val selectedClip = clips.getOrNull(selectedClipIndex)
+    val selectedOverlay = overlays.firstOrNull { it.id == selectedOverlayId }
+
+    @Composable
+    fun RenderActiveToolPanel() {
+        when (activeTab) {
+            ProVideoToolTab.EDIT -> EditClipToolPanel(
+                selectedClip = selectedClip,
+                selectedClipIndex = selectedClipIndex,
+                clipCount = clips.size,
+                selectedMultiCount = selectedClipIndices.size,
+                onSplitAtPlayhead = {
+                    if (selectedClip != null) {
+                        val activeSpan = (selectedClip.trimEndMs - selectedClip.trimStartMs).coerceAtLeast(1000L)
+                        if (activeSpan < 1400L) {
+                            onShowMessage("O clipe é demasiado curto para dividir.")
+                        } else {
+                            pushUndo()
+                            val (_, relMs, _) = resolveClipTimingAt(currentPosMs)
+                            val cutRel = (relMs * selectedClip.speed).toLong().coerceIn(500L, activeSpan - 500L)
+                            val midMs = selectedClip.trimStartMs + cutRel
+                            val firstHalf = selectedClip.copy(trimEndMs = midMs)
+                            val secondHalf = selectedClip.copy(
+                                clipId = "split_${UUID.randomUUID().toString().take(8)}",
+                                title = "${selectedClip.title} (2)",
+                                trimStartMs = midMs
+                            )
+                            clips[selectedClipIndex] = firstHalf
+                            clips.add(selectedClipIndex + 1, secondHalf)
+                            selectedClipIndex += 1
+                            onShowMessage("Clipe dividido na posição atual!")
+                        }
+                    }
+                },
+                onDuplicateClip = {
+                    if (selectedClip != null) {
+                        pushUndo()
+                        clips.add(
+                            selectedClipIndex + 1,
+                            selectedClip.copy(
+                                clipId = "dup_${UUID.randomUUID().toString().take(8)}",
+                                title = "${selectedClip.title} (Cópia)"
+                            )
+                        )
+                        selectedClipIndex += 1
+                        onShowMessage("Clipe duplicado!")
+                    }
+                },
+                onReplaceClip = {
+                    if (selectedClip != null) {
+                        isReplacingClip = true
+                        if (selectedClip.mediaType == "image") {
+                            pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        } else {
+                            pickVideoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                        }
+                    }
+                },
+                onFreezeFrame = {
+                    if (selectedClip != null) {
+                        aiBusy = true
+                        scope.launch {
+                            val (_, relMs, _) = resolveClipTimingAt(currentPosMs)
+                            VideoProProcessors.captureFreezeFrame(context, selectedClip, relMs).fold(
+                                onSuccess = { frz ->
+                                    pushUndo()
+                                    clips.add(selectedClipIndex + 1, frz)
+                                    selectedClipIndex += 1
+                                    sound?.playSuccess()
+                                    onShowMessage("Fotograma congelado inserido!")
+                                },
+                                onFailure = { onShowMessage(it.localizedMessage ?: "Erro ao congelar fotograma.") }
+                            )
+                            aiBusy = false
+                        }
+                    }
+                },
+                onReverseClip = {
+                    if (selectedClip != null) {
+                        aiBusy = true
+                        onShowMessage("A gerar vídeo reverso real...")
+                        scope.launch {
+                            VideoProProcessors.generateReversedVideoClip(context, selectedClip).fold(
+                                onSuccess = { revClip ->
+                                    pushUndo()
+                                    clips[selectedClipIndex] = revClip
+                                    sound?.playSuccess()
+                                    onShowMessage("Reprodução reversa aplicada!")
+                                },
+                                onFailure = { onShowMessage(it.localizedMessage ?: "Falha ao inverter vídeo.") }
+                            )
+                            aiBusy = false
+                        }
+                    }
+                },
+                onDeleteClips = {
+                    pushUndo()
+                    if (selectedClipIndices.size > 1) {
+                        val toKeep = clips.filterIndexed { i, _ -> i !in selectedClipIndices }
+                        clips.clear()
+                        clips.addAll(toKeep)
+                        selectedClipIndices = emptySet()
+                    } else if (selectedClipIndex in clips.indices) {
+                        clips.removeAt(selectedClipIndex)
+                    }
+                    selectedClipIndex = selectedClipIndex.coerceIn(0, (clips.size - 1).coerceAtLeast(0))
+                },
+                onUpdateClip = { updated ->
+                    if (selectedClipIndex in clips.indices) clips[selectedClipIndex] = updated
+                },
+                onMoveClip = { delta ->
+                    val target = selectedClipIndex + delta
+                    if (selectedClipIndex in clips.indices && target in clips.indices) {
+                        pushUndo()
+                        val item = clips.removeAt(selectedClipIndex)
+                        clips.add(target, item)
+                        selectedClipIndex = target
+                    }
+                }
+            )
+
+            ProVideoToolTab.AUDIO -> AudioStudioToolPanel(
+                audioTracks = audioTracks.toList(),
+                selectedAudioId = selectedAudioId,
+                previewingUri = previewingAudioUri,
+                isRecordingVoice = isRecordingVoice,
+                micLevel = micLevel,
+                canExtractFromClip = selectedClip?.mediaType == "video",
+                currentPosMs = currentPosMs,
+                onImportDeviceAudio = {
+                    pickAudioLauncher.launch(arrayOf("audio/*"))
+                },
+                onToggleRecordVoice = { toggleVoiceRecordingWithPermission() },
+                onExtractVideoAudio = {
+                    val clip = selectedClip ?: return@AudioStudioToolPanel
+                    scope.launch {
+                        VideoAudioStudioEngine.extractAudioFromVideo(context, clip.uriString, clip.title, currentPosMs).fold(
+                            onSuccess = { trk ->
+                                pushUndo()
+                                audioTracks.add(trk)
+                                selectedAudioId = trk.id
+                                sound?.playSuccess()
+                                onShowMessage("Áudio extraído do vídeo!")
+                            },
+                            onFailure = { onShowMessage(it.localizedMessage ?: "Não foi possível extrair áudio.") }
+                        )
+                    }
+                },
+                onPreviewPreset = { preset ->
+                    scope.launch {
+                        VideoAudioStudioEngine.ensurePresetWavTrack(context, preset).onSuccess { trk ->
+                            previewingAudioUri = trk.uriString
+                            audioMixer.previewSingle(trk.uriString) {
+                                previewingAudioUri = null
+                            }
+                        }
+                    }
+                },
+                onStopPreview = {
+                    audioMixer.stopSinglePreview()
+                    previewingAudioUri = null
+                },
+                onAddPresetTrack = { preset ->
+                    scope.launch {
+                        VideoAudioStudioEngine.ensurePresetWavTrack(context, preset, currentPosMs).fold(
+                            onSuccess = { trk ->
+                                pushUndo()
+                                audioTracks.add(trk)
+                                selectedAudioId = trk.id
+                                sound?.playSuccess()
+                                onShowMessage("'${preset.title}' adicionada à timeline!")
+                            },
+                            onFailure = { onShowMessage("Erro ao carregar faixa.") }
+                        )
+                    }
+                },
+                onSelectTrack = { selectedAudioId = it },
+                onUpdateTrack = { trk ->
+                    val idx = audioTracks.indexOfFirst { it.id == trk.id }
+                    if (idx >= 0) audioTracks[idx] = trk
+                },
+                onSplitTrackAtPlayhead = { trkId ->
+                    val idx = audioTracks.indexOfFirst { it.id == trkId }
+                    if (idx >= 0) {
+                        val trk = audioTracks[idx]
+                        val rel = currentPosMs - trk.startMs
+                        if (rel > 400L && rel < trk.activeDurationMs - 400L) {
+                            pushUndo()
+                            val cutPoint = trk.trimStartMs + rel
+                            audioTracks[idx] = trk.copy(trimEndMs = cutPoint)
+                            val second = trk.copy(
+                                id = "aud_${UUID.randomUUID().toString().take(8)}",
+                                title = "${trk.title} (2)",
+                                startMs = currentPosMs,
+                                trimStartMs = cutPoint
+                            )
+                            audioTracks.add(idx + 1, second)
+                            selectedAudioId = second.id
+                            onShowMessage("Faixa de áudio dividida!")
+                        } else {
+                            onShowMessage("Posicione a agulha dentro da faixa para dividir.")
+                        }
+                    }
+                },
+                onDeleteTrack = { trkId ->
+                    pushUndo()
+                    audioTracks.removeAll { it.id == trkId }
+                    selectedAudioId = audioTracks.firstOrNull()?.id
+                }
+            )
+
+            ProVideoToolTab.TEXT -> TextAndSubtitlesToolPanel(
+                selectedOverlay = selectedOverlay,
+                importedFonts = importedFonts.toList(),
+                onAddTextOverlay = { text, isSub, is3D, bgHex, g1, g2 ->
+                    pushUndo()
+                    val ov = ProOverlayItem(
+                        kind = if (isSub) VideoOverlayKind.SUBTITLE else VideoOverlayKind.TEXT,
+                        title = text.take(18),
+                        text = text,
+                        startMs = currentPosMs,
+                        endMs = (currentPosMs + 4500L).coerceAtLeast(currentPosMs + 1500L),
+                        yFraction = if (isSub) 0.80f else 0.42f,
+                        fontSizeSp = if (isSub) 19f else 28f,
+                        is3DText = is3D,
+                        bgColorHex = bgHex,
+                        gradientStartHex = g1,
+                        gradientEndHex = g2
+                    )
+                    overlays.add(ov)
+                    selectedOverlayId = ov.id
+                },
+                onImportCustomFont = {
+                    pickCustomFontLauncher.launch(arrayOf("*/*"))
+                },
+                onGenerateTtsFromText = { text ->
+                    aiBusy = true
+                    scope.launch {
+                        VideoAudioStudioEngine.synthesizeTextToAudioTrack(context, text, startMs = currentPosMs).fold(
+                            onSuccess = { trk ->
+                                pushUndo()
+                                audioTracks.add(trk)
+                                selectedAudioId = trk.id
+                                sound?.playSuccess()
+                                onShowMessage("Voz gerada e adicionada na timeline!")
+                            },
+                            onFailure = { onShowMessage(it.localizedMessage ?: "Erro no motor TTS.") }
+                        )
+                        aiBusy = false
+                    }
+                },
+                onGenerateAiCaptions = { runAiAutoCaptions(projectTitle) },
+                onUpdateOverlay = { ov ->
+                    val idx = overlays.indexOfFirst { it.id == ov.id }
+                    if (idx >= 0) overlays[idx] = ov
+                },
+                onDeleteOverlay = { id ->
+                    pushUndo()
+                    overlays.removeAll { it.id == id }
+                    if (selectedOverlayId == id) selectedOverlayId = null
+                }
+            )
+
+            ProVideoToolTab.LAYERS -> LayersAndOverlaysToolPanel(
+                overlays = overlays.toList(),
+                selectedOverlayId = selectedOverlayId,
+                onAddImageOverlay = {
+                    pickOverlayImageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                },
+                onAddVideoPip = {
+                    pickOverlayVideoPipLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                },
+                onAddBuiltInOverlay = { kind, title, textOrSymbol, colorHex ->
+                    pushUndo()
+                    val ov = ProOverlayItem(
+                        kind = kind,
+                        title = title,
+                        text = if (kind == VideoOverlayKind.SHAPE) "" else textOrSymbol,
+                        symbolKey = if (kind == VideoOverlayKind.SHAPE) textOrSymbol else "star",
+                        colorHex = colorHex,
+                        startMs = currentPosMs,
+                        endMs = (currentPosMs + 5000L).coerceAtLeast(currentPosMs + 1500L),
+                        xFraction = if (kind == VideoOverlayKind.VERIFIED_BADGE) 0.85f else 0.5f,
+                        yFraction = if (kind == VideoOverlayKind.WATERMARK) 0.14f else 0.5f,
+                        fontSizeSp = if (kind == VideoOverlayKind.WATERMARK) 14f else 24f
+                    )
+                    overlays.add(ov)
+                    selectedOverlayId = ov.id
+                },
+                onSelectOverlay = { selectedOverlayId = it },
+                onMoveOverlayZ = { id, delta ->
+                    val idx = overlays.indexOfFirst { it.id == id }
+                    val target = idx + delta
+                    if (idx >= 0 && target in overlays.indices) {
+                        pushUndo()
+                        val item = overlays.removeAt(idx)
+                        overlays.add(target, item)
+                    }
+                },
+                onDuplicateOverlay = { id ->
+                    val src = overlays.firstOrNull { it.id == id } ?: return@LayersAndOverlaysToolPanel
+                    pushUndo()
+                    val dup = src.copy(
+                        id = "ov_${UUID.randomUUID().toString().take(8)}",
+                        title = "${src.title} (2)",
+                        xFraction = (src.xFraction + 0.06f).coerceIn(0.1f, 0.9f),
+                        yFraction = (src.yFraction + 0.06f).coerceIn(0.1f, 0.9f)
+                    )
+                    overlays.add(dup)
+                    selectedOverlayId = dup.id
+                },
+                onUpdateOverlay = { ov ->
+                    val idx = overlays.indexOfFirst { it.id == ov.id }
+                    if (idx >= 0) overlays[idx] = ov
+                },
+                onDeleteOverlay = { id ->
+                    pushUndo()
+                    overlays.removeAll { it.id == id }
+                    if (selectedOverlayId == id) selectedOverlayId = null
+                }
+            )
+
+            ProVideoToolTab.EFFECTS -> EffectsAndColorToolPanel(
+                selectedClip = selectedClip,
+                onUpdateClip = { updated ->
+                    if (selectedClipIndex in clips.indices) clips[selectedClipIndex] = updated
+                }
+            )
+
+            ProVideoToolTab.ANIMATE -> AnimationsAndKeyframesToolPanel(
+                selectedClip = selectedClip,
+                selectedOverlay = selectedOverlay,
+                clipProgress = currentClipProgress,
+                onUpdateClip = { updated ->
+                    if (selectedClipIndex in clips.indices) clips[selectedClipIndex] = updated
+                },
+                onUpdateOverlay = { ov ->
+                    val idx = overlays.indexOfFirst { it.id == ov.id }
+                    if (idx >= 0) overlays[idx] = ov
+                }
+            )
+
+            ProVideoToolTab.TRANSITIONS -> TransitionsToolPanel(
+                selectedClip = selectedClip,
+                onUpdateClip = { updated ->
+                    if (selectedClipIndex in clips.indices) clips[selectedClipIndex] = updated
+                },
+                onApplyToAll = { trans, dur ->
+                    pushUndo()
+                    for (i in clips.indices) {
+                        clips[i] = clips[i].copy(transition = trans, transitionDurationMs = dur)
+                    }
+                    onShowMessage("Transição '${trans.label}' aplicada a todos os clipes!")
+                }
+            )
+
+            ProVideoToolTab.AI -> AiStudioVideoToolPanel(
+                aiBusy = aiBusy,
+                onRemoveBackground = { runAiBgRemovalOrCutout(isSmartCutout = false) },
+                onSmartSubjectCutout = { runAiBgRemovalOrCutout(isSmartCutout = true) },
+                onAutoCaptions = { topic -> runAiAutoCaptions(topic) },
+                onTextToSpeech = { text ->
+                    aiBusy = true
+                    scope.launch {
+                        VideoAudioStudioEngine.synthesizeTextToAudioTrack(context, text, startMs = currentPosMs).fold(
+                            onSuccess = { trk ->
+                                pushUndo()
+                                audioTracks.add(trk)
+                                selectedAudioId = trk.id
+                                sound?.playSuccess()
+                                onShowMessage("Áudio TTS adicionado à timeline!")
+                            },
+                            onFailure = { onShowMessage(it.localizedMessage ?: "Erro no TTS.") }
+                        )
+                        aiBusy = false
+                    }
+                },
+                onAiEnhanceVideo = { runAiFrameAnalysis("enhance") },
+                onAiSmartSlowMo = { runAiFrameAnalysis("smart_slowmo") },
+                onAiObjectTracking = { runAiFrameAnalysis("track_object") },
+                onAiGenerateSticker = { prompt ->
+                    aiBusy = true
+                    scope.launch {
+                        aiRepository.generateImageFromPrompt(
+                            "Clean isolated flat vector sticker icon of: $prompt. Bold crisp outline on pure solid #00FF00 background."
+                        ).fold(
+                            onSuccess = { bmp ->
+                                val keyed = withContext(Dispatchers.IO) {
+                                    VideoProProcessors.applyChromaKeyToBitmap(bmp, "#00FF00", 0.36f)
+                                }
+                                val uri = BitmapRenderer.saveBitmapToTempUri(context, keyed, "ai_sticker")
+                                bmp.recycle(); keyed.recycle()
+                                pushUndo()
+                                val ov = ProOverlayItem(
+                                    kind = VideoOverlayKind.IMAGE,
+                                    title = "Sticker IA",
+                                    uriString = uri.toString(),
+                                    startMs = currentPosMs,
+                                    endMs = (currentPosMs + 5000L).coerceAtLeast(currentPosMs + 1500L)
+                                )
+                                overlays.add(ov)
+                                selectedOverlayId = ov.id
+                                sound?.playSuccess()
+                                onShowMessage("Sticker IA criado e adicionado!")
+                            },
+                            onFailure = { onShowMessage(it.localizedMessage ?: "Erro ao gerar sticker IA.") }
+                        )
+                        aiBusy = false
+                    }
+                },
+                onToggleVoiceEnhance = {
+                    val trk = audioTracks.firstOrNull { it.id == selectedAudioId } ?: audioTracks.firstOrNull()
+                    if (trk != null) {
+                        val idx = audioTracks.indexOfFirst { it.id == trk.id }
+                        if (idx >= 0) {
+                            audioTracks[idx] = trk.copy(noiseReduction = !trk.noiseReduction, vocalIsolation = !trk.vocalIsolation)
+                            onShowMessage(if (!trk.noiseReduction) "Melhoramento de voz ativado!" else "Melhoramento de voz desativado.")
+                        }
+                    } else {
+                        onShowMessage("Adicione ou grave uma faixa de voz primeiro.")
+                    }
+                }
+            )
+
+            ProVideoToolTab.BACKGROUNDS -> BackgroundsAndFormatToolPanel(
+                aspectRatio = aspectRatio,
+                bgColorStart = bgColorStart,
+                bgColorEnd = bgColorEnd,
+                animatedBgStyle = animatedBgStyle,
+                onSelectAspectRatio = { aspectRatio = it },
+                onSelectBgColors = { s, e -> bgColorStart = s; bgColorEnd = e },
+                onSelectAnimatedStyle = { animatedBgStyle = it },
+                onSelectScenePhoto = { bgImageUri = it },
+                onPickGalleryBgPhoto = {
+                    pickBgImageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                },
+                onClearBgPhoto = { bgImageUri = null }
+            )
         }
     }
 
@@ -417,776 +1302,352 @@ fun VideoEditorScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onBack, modifier = Modifier.minimumInteractiveComponentSize()) {
+                    IconButton(
+                        onClick = {
+                            sound?.playTap()
+                            onBack()
+                        },
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { showRenameDialog = true }
+                    ) {
                         Text(
-                            text = "Editar Vídeo",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            maxLines = 1
+                            text = projectTitle,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "$aspectRatio • ${clips.size} clipes",
+                            text = "$aspectRatio • ${clips.size} clipes • ${audioTracks.size} áudios",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(
-                        onClick = {
-                            val bgMetaLayers = if (bgImageUri != null) {
-                                listOf(
-                                    mapOf(
-                                        "layerId" to "video_bg_image",
-                                        "type" to "IMAGE",
-                                        "name" to "Fundo Vídeo",
-                                        "imageUri" to bgImageUri!!
-                                    )
-                                )
-                            } else emptyList()
-                            onSaveToCloud(
-                                initialProject.copy(
-                                    title = projectTitle,
-                                    formatName = "Vídeo $aspectRatio",
-                                    backgroundColorHex = bgColorStart,
-                                    backgroundGradientHex = bgColorEnd,
-                                    layers = bgMetaLayers,
-                                    videoClips = clips.map { it.toMap() },
-                                    projectType = "video"
-                                )
-                            )
-                        },
+                        onClick = { saveProjectNow() },
                         modifier = Modifier.minimumInteractiveComponentSize()
                     ) {
                         Icon(Icons.Filled.CloudUpload, contentDescription = "Guardar Vídeo", tint = CyanGlow)
                     }
                     Button(
-                        onClick = { showExportModal = true },
+                        onClick = {
+                            sound?.playTap()
+                            showExportModal = true
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent, contentColor = Color.White),
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
                             .testTag("video_export_button")
                     ) {
                         Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Exportar", fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Exportar", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
             }
         }
     ) { padding ->
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .background(NavyDeep)
         ) {
-            // 1. Spacious Video Preview Viewport (maximizes visibility!)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(if (fullscreenPreview) 1f else 1.45f)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                val ratio = when (aspectRatio) {
-                    "9:16" -> 9f / 16f
-                    "1:1" -> 1f
-                    "4:5" -> 4f / 5f
-                    else -> 16f / 9f
-                }
-                val isTransparentBg = bgColorStart.equals("transparent", ignoreCase = true)
-                val startCol = if (isTransparentBg) Color.Transparent else parseComposeColor(bgColorStart, Color.Black)
-                val endCol = if (isTransparentBg) Color.Transparent else (bgColorEnd?.let { parseComposeColor(it, startCol) } ?: startCol)
+            val isWideScreen = maxWidth >= 840.dp && !fullscreenPreview
 
-                Box(
-                    modifier = Modifier
-                        .aspectRatio(ratio, matchHeightConstraintsFirst = true)
-                        .clip(RoundedCornerShape(16.dp))
-                        .then(
-                            if (!isTransparentBg) Modifier.background(Brush.linearGradient(listOf(startCol, endCol)))
-                            else Modifier
-                        )
-                        .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isTransparentBg) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val cell = 22f
-                            val cols = (size.width / cell).toInt() + 1
-                            val rows = (size.height / cell).toInt() + 1
-                            for (r in 0..rows) {
-                                for (c in 0..cols) {
-                                    drawRect(
-                                        color = if ((r + c) % 2 == 0) Color(0xFF2B3548) else Color(0xFF1B2333),
-                                        topLeft = Offset(c * cell, r * cell),
-                                        size = Size(cell, cell)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Optional Video Canvas Background Image
-                    if (!bgImageUri.isNullOrBlank()) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context).data(Uri.parse(bgImageUri)).crossfade(true).build(),
-                            contentDescription = "Imagem de fundo do vídeo",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-
-                    val showSelectedPhoto = selectedClip?.mediaType == "image" || (clips.isNotEmpty() && clips.none { it.mediaType == "video" })
-                    if (showSelectedPhoto && selectedClip != null) {
-                        val photoFilter = videoFilterColorMatrix(selectedClip.filter)
-                        AsyncImage(
-                            model = ImageRequest.Builder(context).data(Uri.parse(selectedClip.uriString)).crossfade(true).build(),
-                            contentDescription = selectedClip.title,
-                            contentScale = ContentScale.Fit,
-                            colorFilter = photoFilter?.let { ColorFilter.colorMatrix(it) },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else if (clips.any { it.mediaType == "video" }) {
-                        AndroidView(
-                            factory = { ctx ->
-                                PlayerView(ctx).apply {
-                                    useController = false
-                                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                    setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                    player = exoPlayer
-                                    layoutParams = FrameLayout.LayoutParams(
-                                        ViewGroup.LayoutParams.MATCH_PARENT,
-                                        ViewGroup.LayoutParams.MATCH_PARENT
+            if (isWideScreen) {
+                // Adaptive Tablet / Desktop / PC Layout: Preview + Timeline on Left, Tools in Lateral Side Panel
+                Row(modifier = Modifier.fillMaxSize()) {
+                    Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        VideoPreviewCanvas(
+                            exoPlayer = exoPlayer,
+                            clips = clips.toList(),
+                            selectedClipIndex = selectedClipIndex,
+                            overlays = overlays.toList(),
+                            selectedOverlayId = selectedOverlayId,
+                            aspectRatio = aspectRatio,
+                            bgColorStart = bgColorStart,
+                            bgColorEnd = bgColorEnd,
+                            bgImageUri = bgImageUri,
+                            animatedBgStyle = animatedBgStyle,
+                            currentPosMs = currentPosMs,
+                            clipRelativeProgress = currentClipProgress,
+                            isPlaying = isPlaying,
+                            fullscreenPreview = false,
+                            onTogglePlayPause = { isPlaying = !isPlaying },
+                            onToggleFullscreen = { fullscreenPreview = !fullscreenPreview },
+                            onCycleAspectRatio = {
+                                val ratios = listOf("9:16", "16:9", "1:1", "3:4", "4:5")
+                                aspectRatio = ratios[(ratios.indexOf(aspectRatio) + 1) % ratios.size]
+                            },
+                            onAddVideo = { pickVideoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                            onAddPhoto = { pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            onSelectOverlay = { selectedOverlayId = it },
+                            onDragOverlay = { id, dx, dy ->
+                                val idx = overlays.indexOfFirst { it.id == id }
+                                if (idx >= 0) {
+                                    val o = overlays[idx]
+                                    overlays[idx] = o.copy(
+                                        xFraction = (o.xFraction + dx).coerceIn(0.05f, 0.95f),
+                                        yFraction = (o.yFraction + dy).coerceIn(0.05f, 0.95f)
                                     )
                                 }
                             },
-                            update = { view ->
-                                view.player = exoPlayer
-                                view.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                            },
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.weight(1.45f).padding(10.dp)
                         )
-                        // Visual filter tint preview over video playback
-                        val filterTint = when (selectedClip?.filter) {
-                            VideoFilterKind.WARM -> Color(0x33FF8C00)
-                            VideoFilterKind.COOL -> Color(0x3300A8FF)
-                            VideoFilterKind.CINEMA -> Color(0x28000000)
-                            VideoFilterKind.BW -> Color(0x44808080)
-                            else -> Color.Transparent
-                        }
-                        if (filterTint != Color.Transparent) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(filterTint)
-                            )
-                        }
-                    } else {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.padding(18.dp)
-                        ) {
-                            Icon(Icons.Filled.VideoCall, contentDescription = null, tint = OrangeBright, modifier = Modifier.size(46.dp))
-                            Text(
-                                text = "Importe vídeos ou fotos para montar o seu projeto",
-                                color = Color.White.copy(alpha = 0.9f),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = {
-                                        pickVideoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent),
-                                    modifier = Modifier.testTag("video_add_clip_button")
-                                ) {
-                                    Text("+ Vídeo")
-                                }
-                                OutlinedButton(
-                                    onClick = {
-                                        pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                    }
-                                ) {
-                                    Text("+ Foto", color = Color.White)
-                                }
-                            }
-                        }
-                    }
 
-                    // Overlay texts preview
-                    textOverlays.forEach { ov ->
-                        Box(
-                            modifier = Modifier
-                                .align(if (ov.yPositionFraction > 0.6f) Alignment.BottomCenter else Alignment.Center)
-                                .padding(14.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (ov.isSubtitle) Color.Black.copy(alpha = 0.65f) else Color.Transparent)
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = ov.text,
-                                color = parseComposeColor(ov.colorHex, Color.White),
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                        }
-                    }
-
-                    // Play/Pause floating control when video clips exist
-                    if (clips.any { it.mediaType == "video" } && !showSelectedPhoto) {
-                        IconButton(
-                            onClick = {
-                                if (isPlaying) {
-                                    exoPlayer.pause()
-                                    isPlaying = false
-                                } else {
-                                    exoPlayer.play()
-                                    isPlaying = true
+                        VideoTimelineView(
+                            clips = clips.toList(),
+                            audioTracks = audioTracks.toList(),
+                            overlays = overlays.toList(),
+                            selectedClipIndex = selectedClipIndex,
+                            selectedClipIndices = selectedClipIndices,
+                            multiSelectMode = multiSelectMode,
+                            selectedAudioId = selectedAudioId,
+                            selectedOverlayId = selectedOverlayId,
+                            currentPosMs = currentPosMs,
+                            totalDurationMs = totalDurationMs,
+                            timelineZoom = timelineZoom,
+                            snapEnabled = snapEnabled,
+                            toolsExpanded = toolsExpanded,
+                            canUndo = undoStack.isNotEmpty(),
+                            canRedo = redoStack.isNotEmpty(),
+                            onUndo = { undoStack.removeLastOrNull()?.let { redoStack.add(captureSnapshot()); restoreSnapshot(it) } },
+                            onRedo = { redoStack.removeLastOrNull()?.let { undoStack.add(captureSnapshot()); restoreSnapshot(it) } },
+                            onToggleMultiSelect = {
+                                multiSelectMode = !multiSelectMode
+                                if (!multiSelectMode) selectedClipIndices = emptySet()
+                            },
+                            onToggleSnap = { snapEnabled = !snapEnabled },
+                            onTimelineZoomChange = { timelineZoom = it },
+                            onToggleToolsExpanded = { toolsExpanded = !toolsExpanded },
+                            onSeekToMs = { seekTimelineTo(it) },
+                            onSelectClip = { idx ->
+                                if (multiSelectMode) {
+                                    selectedClipIndices = if (idx in selectedClipIndices) selectedClipIndices - idx else selectedClipIndices + idx
+                                }
+                                selectedClipIndex = idx
+                            },
+                            onSwapClips = { a, b ->
+                                if (a in clips.indices && b in clips.indices) {
+                                    pushUndo()
+                                    val item = clips.removeAt(a)
+                                    clips.add(b, item)
+                                    selectedClipIndex = b
                                 }
                             },
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .size(54.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.45f))
-                                .testTag("video_play_pause_button")
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                contentDescription = if (isPlaying) "Pausar" else "Reproduzir",
-                                tint = Color.White,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
+                            onSelectAudio = { selectedAudioId = it; activeTab = ProVideoToolTab.AUDIO },
+                            onNudgeAudioStart = { id, delta ->
+                                val idx = audioTracks.indexOfFirst { it.id == id }
+                                if (idx >= 0) {
+                                    val t = audioTracks[idx]
+                                    val raw = (t.startMs + delta).coerceIn(0L, 120_000L)
+                                    audioTracks[idx] = t.copy(startMs = if (snapEnabled) ((raw + 125L) / 250L) * 250L else raw)
+                                }
+                            },
+                            onSelectOverlay = { selectedOverlayId = it },
+                            onAddVideo = { pickVideoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                            onAddPhoto = { pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                        )
                     }
-                }
 
-                // Expand / Fullscreen preview toggle
-                IconButton(
-                    onClick = { fullscreenPreview = !fullscreenPreview },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.55f))
-                ) {
-                    Icon(
-                        imageVector = if (fullscreenPreview) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
-                        contentDescription = if (fullscreenPreview) "Sair do ecrã inteiro" else "Ampliar pré-visualização",
-                        tint = Color.White
-                    )
-                }
-            }
+                    VerticalDivider()
 
-            if (!fullscreenPreview) {
-                // 2. Timecode & Quick Import Bar + Collapse Toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${formatDuration(currentPosMs)} / ${formatDuration(totalDurationMs)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.85f)
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Lateral Pro Tool Panel
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.width(350.dp).fillMaxHeight()
                     ) {
-                        TextButton(
-                            onClick = {
-                                pickVideoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
-                            }
-                        ) {
-                            Icon(Icons.Filled.VideoCall, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Vídeo", color = OrangeAccent)
-                        }
-                        TextButton(
-                            onClick = {
-                                pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                            }
-                        ) {
-                            Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null, tint = CyanGlow, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Foto", color = CyanGlow)
-                        }
-                        IconButton(onClick = { toolsExpanded = !toolsExpanded }, modifier = Modifier.size(34.dp)) {
-                            Icon(
-                                imageVector = if (toolsExpanded) Icons.Filled.ExpandMore else Icons.Filled.ExpandLess,
-                                contentDescription = if (toolsExpanded) "Minimizar ferramentas" else "Expandir ferramentas",
-                                tint = Color.White
-                            )
-                        }
-                    }
-                }
-
-                // 3. Multi-track Visual Timeline + Collapsible Controls
-                Surface(
-                    color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 14.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            itemsIndexed(clips) { idx, clip ->
-                                val isSel = idx == selectedClipIndex
-                                Surface(
-                                    modifier = Modifier
-                                        .width(136.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            selectedClipIndex = idx
-                                            if (clip.mediaType == "video") {
-                                                val videoIdx = clips.take(idx + 1).count { it.mediaType == "video" } - 1
-                                                if (videoIdx >= 0 && videoIdx < exoPlayer.mediaItemCount) {
-                                                    exoPlayer.seekTo(videoIdx, 0L)
-                                                }
-                                            }
-                                        }
-                                        .border(
-                                            if (isSel) 2.dp else 1.dp,
-                                            if (isSel) OrangeAccent else MaterialTheme.colorScheme.outlineVariant,
-                                            RoundedCornerShape(12.dp)
-                                        ),
-                                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                ProVideoToolTab.entries.forEach { tab ->
+                                    val isActive = tab == activeTab
+                                    Surface(
+                                        color = if (isActive) OrangeAccent.copy(alpha = 0.16f) else Color.Transparent,
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.clickable { activeTab = tab }
                                     ) {
-                                        if (clip.mediaType == "image") {
-                                            AsyncImage(
-                                                model = Uri.parse(clip.uriString),
-                                                contentDescription = clip.title,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier
-                                                    .size(34.dp)
-                                                    .clip(RoundedCornerShape(8.dp))
-                                            )
-                                        } else {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(34.dp)
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(OrangeAccent.copy(alpha = 0.2f)),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(Icons.Filled.Movie, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(18.dp))
-                                            }
-                                        }
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = clip.title,
-                                                style = MaterialTheme.typography.labelMedium,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                text = "${(clip.trimEndMs - clip.trimStartMs) / 1000f}s • ${clip.speed}x",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1
-                                            )
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(tab.icon, contentDescription = null, tint = if (isActive) OrangeAccent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                            Text(tab.label, style = MaterialTheme.typography.labelSmall, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium)
                                         }
                                     }
                                 }
                             }
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(12.dp)
+                            ) {
+                                RenderActiveToolPanel()
+                            }
                         }
+                    }
+                }
+            } else {
+                // Phone / Portrait Adaptive Workspace: Maximized Preview + Timeline + Collapsible Drawer
+                Column(modifier = Modifier.fillMaxSize()) {
+                    VideoPreviewCanvas(
+                        exoPlayer = exoPlayer,
+                        clips = clips.toList(),
+                        selectedClipIndex = selectedClipIndex,
+                        overlays = overlays.toList(),
+                        selectedOverlayId = selectedOverlayId,
+                        aspectRatio = aspectRatio,
+                        bgColorStart = bgColorStart,
+                        bgColorEnd = bgColorEnd,
+                        bgImageUri = bgImageUri,
+                        animatedBgStyle = animatedBgStyle,
+                        currentPosMs = currentPosMs,
+                        clipRelativeProgress = currentClipProgress,
+                        isPlaying = isPlaying,
+                        fullscreenPreview = fullscreenPreview,
+                        onTogglePlayPause = { isPlaying = !isPlaying },
+                        onToggleFullscreen = { fullscreenPreview = !fullscreenPreview },
+                        onCycleAspectRatio = {
+                            val ratios = listOf("9:16", "16:9", "1:1", "3:4", "4:5")
+                            aspectRatio = ratios[(ratios.indexOf(aspectRatio) + 1) % ratios.size]
+                        },
+                        onAddVideo = { pickVideoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                        onAddPhoto = { pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        onSelectOverlay = { selectedOverlayId = it },
+                        onDragOverlay = { id, dx, dy ->
+                            val idx = overlays.indexOfFirst { it.id == id }
+                            if (idx >= 0) {
+                                val o = overlays[idx]
+                                overlays[idx] = o.copy(
+                                    xFraction = (o.xFraction + dx).coerceIn(0.05f, 0.95f),
+                                    yFraction = (o.yFraction + dy).coerceIn(0.05f, 0.95f)
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(if (fullscreenPreview || !toolsExpanded) 1f else 1.55f)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+
+                    if (!fullscreenPreview) {
+                        VideoTimelineView(
+                            clips = clips.toList(),
+                            audioTracks = audioTracks.toList(),
+                            overlays = overlays.toList(),
+                            selectedClipIndex = selectedClipIndex,
+                            selectedClipIndices = selectedClipIndices,
+                            multiSelectMode = multiSelectMode,
+                            selectedAudioId = selectedAudioId,
+                            selectedOverlayId = selectedOverlayId,
+                            currentPosMs = currentPosMs,
+                            totalDurationMs = totalDurationMs,
+                            timelineZoom = timelineZoom,
+                            snapEnabled = snapEnabled,
+                            toolsExpanded = toolsExpanded,
+                            canUndo = undoStack.isNotEmpty(),
+                            canRedo = redoStack.isNotEmpty(),
+                            onUndo = { undoStack.removeLastOrNull()?.let { redoStack.add(captureSnapshot()); restoreSnapshot(it) } },
+                            onRedo = { redoStack.removeLastOrNull()?.let { undoStack.add(captureSnapshot()); restoreSnapshot(it) } },
+                            onToggleMultiSelect = {
+                                multiSelectMode = !multiSelectMode
+                                if (!multiSelectMode) selectedClipIndices = emptySet()
+                            },
+                            onToggleSnap = { snapEnabled = !snapEnabled },
+                            onTimelineZoomChange = { timelineZoom = it },
+                            onToggleToolsExpanded = { toolsExpanded = !toolsExpanded },
+                            onSeekToMs = { seekTimelineTo(it) },
+                            onSelectClip = { idx ->
+                                if (multiSelectMode) {
+                                    selectedClipIndices = if (idx in selectedClipIndices) selectedClipIndices - idx else selectedClipIndices + idx
+                                }
+                                selectedClipIndex = idx
+                            },
+                            onSwapClips = { a, b ->
+                                if (a in clips.indices && b in clips.indices) {
+                                    pushUndo()
+                                    val item = clips.removeAt(a)
+                                    clips.add(b, item)
+                                    selectedClipIndex = b
+                                }
+                            },
+                            onSelectAudio = { selectedAudioId = it; activeTab = ProVideoToolTab.AUDIO },
+                            onNudgeAudioStart = { id, delta ->
+                                val idx = audioTracks.indexOfFirst { it.id == id }
+                                if (idx >= 0) {
+                                    val t = audioTracks[idx]
+                                    val raw = (t.startMs + delta).coerceIn(0L, 120_000L)
+                                    audioTracks[idx] = t.copy(startMs = if (snapEnabled) ((raw + 125L) / 250L) * 250L else raw)
+                                }
+                            },
+                            onSelectOverlay = { selectedOverlayId = it },
+                            onAddVideo = { pickVideoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                            onAddPhoto = { pickPhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                        )
 
                         if (toolsExpanded) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            // Audio track strip
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable { pickAudioLauncher.launch(arrayOf("audio/*")) },
-                                color = MaterialTheme.colorScheme.surfaceVariant
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Icon(Icons.Filled.MusicNote, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(18.dp))
-                                        Text(
-                                            text = if (audioUri == null) "Adicionar áudio de fundo (+)" else audioTitle,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = { audioMuted = !audioMuted },
-                                        modifier = Modifier.size(30.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (audioMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                                            contentDescription = "Silenciar áudio",
-                                            tint = if (audioMuted) MaterialTheme.colorScheme.error else OrangeAccent,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            // 4. Contextual Tool Controls (bounded height so preview stays clear)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 128.dp)
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(horizontal = 14.dp, vertical = 6.dp)
-                            ) {
-                                when (activeTab) {
-                                    VideoToolTab.CLIP -> {
-                                        if (selectedClip == null) {
-                                            Text(
-                                                "Selecione um clipe na linha do tempo para cortar, ajustar velocidade ou reordenar.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        } else {
-                                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                Row(
-                                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                ) {
-                                                    FilterChip(
-                                                        selected = false,
-                                                        onClick = {
-                                                            if (selectedClipIndex > 0) {
-                                                                val item = clips.removeAt(selectedClipIndex)
-                                                                clips.add(selectedClipIndex - 1, item)
-                                                                selectedClipIndex -= 1
-                                                            }
-                                                        },
-                                                        label = { Text("Mover Esq.") },
-                                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(16.dp)) }
-                                                    )
-                                                    FilterChip(
-                                                        selected = false,
-                                                        onClick = {
-                                                            if (selectedClipIndex < clips.lastIndex) {
-                                                                val item = clips.removeAt(selectedClipIndex)
-                                                                clips.add(selectedClipIndex + 1, item)
-                                                                selectedClipIndex += 1
-                                                            }
-                                                        },
-                                                        label = { Text("Mover Dir.") },
-                                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(16.dp)) }
-                                                    )
-                                                    FilterChip(
-                                                        selected = false,
-                                                        onClick = {
-                                                            val mid = (selectedClip.trimStartMs + selectedClip.trimEndMs) / 2L
-                                                            if (mid - selectedClip.trimStartMs >= 800L) {
-                                                                clips[selectedClipIndex] = selectedClip.copy(trimEndMs = mid)
-                                                                clips.add(
-                                                                    selectedClipIndex + 1,
-                                                                    selectedClip.copy(
-                                                                        clipId = "split_${UUID.randomUUID().toString().take(6)}",
-                                                                        title = "${selectedClip.title} (2)",
-                                                                        trimStartMs = mid
-                                                                    )
-                                                                )
-                                                            }
-                                                        },
-                                                        label = { Text("Dividir") },
-                                                        leadingIcon = { Icon(Icons.Filled.ContentCut, null, Modifier.size(16.dp)) }
-                                                    )
-                                                    FilterChip(
-                                                        selected = false,
-                                                        onClick = {
-                                                            clips.removeAt(selectedClipIndex)
-                                                            selectedClipIndex = (selectedClipIndex - 1).coerceAtLeast(0)
-                                                        },
-                                                        label = { Text("Remover") },
-                                                        leadingIcon = { Icon(Icons.Filled.Delete, null, Modifier.size(16.dp)) }
-                                                    )
-                                                }
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Text("Duração: ${(selectedClip.trimEndMs - selectedClip.trimStartMs) / 1000f}s", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(96.dp))
-                                                    Slider(
-                                                        value = selectedClip.trimEndMs.toFloat(),
-                                                        onValueChange = { newEnd ->
-                                                            clips[selectedClipIndex] = selectedClip.copy(
-                                                                trimEndMs = newEnd.toLong().coerceAtLeast(selectedClip.trimStartMs + 1000L)
-                                                            )
-                                                        },
-                                                        valueRange = (selectedClip.trimStartMs + 1000L).toFloat()..selectedClip.durationMs.coerceAtLeast(2000L).toFloat(),
-                                                        colors = SliderDefaults.colors(thumbColor = OrangeAccent, activeTrackColor = OrangeAccent),
-                                                        modifier = Modifier.weight(1f)
-                                                    )
-                                                }
-                                                Row(
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Icon(Icons.Filled.Speed, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                    listOf(0.5f, 1.0f, 1.5f, 2.0f).forEach { spd ->
-                                                        FilterChip(
-                                                            selected = selectedClip.speed == spd,
-                                                            onClick = {
-                                                                clips[selectedClipIndex] = selectedClip.copy(speed = spd)
-                                                                exoPlayer.setPlaybackSpeed(spd)
-                                                            },
-                                                            label = { Text("${spd}x") }
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    VideoToolTab.BACKGROUND -> {
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Row(
-                                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Button(
-                                                    onClick = { runAiBackgroundRemovalOnClip() },
-                                                    enabled = !aiBusy && selectedClip != null,
-                                                    colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent, contentColor = Color.White),
-                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                                                ) {
-                                                    Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Text(if (aiBusy) "A remover..." else "Remover Fundo IA")
-                                                }
-                                                FilterChip(
-                                                    selected = !bgImageUri.isNullOrBlank(),
-                                                    onClick = {
-                                                        pickBgImageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                                    },
-                                                    label = { Text(if (bgImageUri == null) "+ Imagem de Fundo" else "Trocar Fundo") }
-                                                )
-                                                if (!bgImageUri.isNullOrBlank()) {
-                                                    FilterChip(
-                                                        selected = false,
-                                                        onClick = { bgImageUri = null },
-                                                        label = { Text("Limpar Imagem") }
-                                                    )
-                                                }
-                                            }
-                                            LazyRow(
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                item {
-                                                    FilterChip(
-                                                        selected = bgColorStart.equals("transparent", ignoreCase = true),
-                                                        onClick = { bgColorStart = "transparent"; bgColorEnd = null },
-                                                        label = { Text("Transparente") }
-                                                    )
-                                                }
-                                                itemsIndexed(EditorColorSwatches) { _, hex ->
-                                                    val active = bgColorStart.equals(hex, true) && bgColorEnd == null
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(28.dp)
-                                                            .clip(CircleShape)
-                                                            .background(parseComposeColor(hex, Color.Black))
-                                                            .border(if (active) 2.5.dp else 1.dp, if (active) OrangeAccent else Color.Gray, CircleShape)
-                                                            .clickable { bgColorStart = hex; bgColorEnd = null }
-                                                    )
-                                                }
-                                                itemsIndexed(EditorBackgroundPresets) { _, (s, e) ->
-                                                    val active = bgColorStart.equals(s, true) && bgColorEnd.equals(e, true)
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(28.dp)
-                                                            .clip(RoundedCornerShape(8.dp))
-                                                            .background(Brush.linearGradient(listOf(parseComposeColor(s), parseComposeColor(e))))
-                                                            .border(if (active) 2.5.dp else 1.dp, if (active) OrangeAccent else Color.Gray, RoundedCornerShape(8.dp))
-                                                            .clickable { bgColorStart = s; bgColorEnd = e }
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    VideoToolTab.AUDIO -> {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Button(
-                                                onClick = { pickAudioLauncher.launch(arrayOf("audio/*")) },
-                                                colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
-                                            ) {
-                                                Text("Escolher Música")
-                                            }
-                                            if (selectedClip != null) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text("Volume do clipe: ${(selectedClip.volume * 100).toInt()}%", style = MaterialTheme.typography.labelSmall)
-                                                    Slider(
-                                                        value = selectedClip.volume,
-                                                        onValueChange = { v ->
-                                                            clips[selectedClipIndex] = selectedClip.copy(volume = v, muted = v == 0f)
-                                                            exoPlayer.volume = v
-                                                        },
-                                                        valueRange = 0f..1f
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    VideoToolTab.TEXT -> {
-                                        Row(
-                                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Button(
-                                                onClick = {
-                                                    newOverlayText = ""
-                                                    newOverlaySubtitle = false
-                                                    showTextDialog = true
-                                                },
-                                                colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
-                                            ) {
-                                                Text("+ Texto / Legenda")
-                                            }
-                                            textOverlays.forEachIndexed { idx, ov ->
-                                                FilterChip(
-                                                    selected = true,
-                                                    onClick = { textOverlays.removeAt(idx) },
-                                                    label = { Text("${ov.text.take(14)} ×") }
-                                                )
-                                            }
-                                        }
-                                    }
-                                    VideoToolTab.FILTER -> {
-                                        Row(
-                                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            VideoFilterKind.entries.forEach { fk ->
-                                                FilterChip(
-                                                    selected = selectedClip?.filter == fk,
-                                                    onClick = {
-                                                        if (selectedClip != null) {
-                                                            clips[selectedClipIndex] = selectedClip.copy(filter = fk)
-                                                        }
-                                                    },
-                                                    label = { Text(fk.label) }
-                                                )
-                                            }
-                                        }
-                                    }
-                                    VideoToolTab.TRANSITION -> {
-                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Row(
-                                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                VideoTransitionKind.entries.forEach { tk ->
-                                                    FilterChip(
-                                                        selected = selectedClip?.transition == tk,
-                                                        onClick = {
-                                                            if (selectedClip != null) {
-                                                                clips[selectedClipIndex] = selectedClip.copy(transition = tk)
-                                                            }
-                                                        },
-                                                        label = { Text(tk.label) }
-                                                    )
-                                                }
-                                            }
-                                            Row(
-                                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(Icons.Filled.Animation, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                listOf("none" to "Sem anim.", "fade" to "Fade In", "zoom" to "Zoom In").forEach { (k, lbl) ->
-                                                    FilterChip(
-                                                        selected = selectedClip?.animation == k,
-                                                        onClick = {
-                                                            if (selectedClip != null) {
-                                                                clips[selectedClipIndex] = selectedClip.copy(animation = k)
-                                                            }
-                                                        },
-                                                        label = { Text(lbl) }
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    VideoToolTab.FORMAT -> {
-                                        Row(
-                                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            listOf("9:16", "16:9", "1:1", "4:5").forEach { ar ->
-                                                FilterChip(
-                                                    selected = aspectRatio == ar,
-                                                    onClick = { aspectRatio = ar },
-                                                    label = { Text(ar) }
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // 5. Bottom Toolbar
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            VideoToolTab.entries.forEach { tab ->
-                                val selected = activeTab == tab
-                                Surface(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            if (activeTab == tab) toolsExpanded = !toolsExpanded
-                                            else {
-                                                activeTab = tab
-                                                toolsExpanded = true
-                                            }
-                                        }
-                                        .minimumInteractiveComponentSize(),
-                                    color = if (selected) OrangeAccent.copy(alpha = 0.16f) else Color.Transparent
-                                ) {
+                            Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+                                Column {
                                     Column(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 120.dp, max = 185.dp)
+                                            .verticalScroll(rememberScrollState())
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
                                     ) {
-                                        Icon(
-                                            tab.icon,
-                                            contentDescription = tab.label,
-                                            tint = if (selected) OrangeAccent else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Text(
-                                            text = tab.label,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (selected) OrangeAccent else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                        RenderActiveToolPanel()
+                                    }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState())
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        ProVideoToolTab.entries.forEach { tab ->
+                                            val isSelected = tab == activeTab
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(if (isSelected) OrangeAccent.copy(alpha = 0.16f) else Color.Transparent)
+                                                    .clickable {
+                                                        sound?.playTap()
+                                                        activeTab = tab
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                            ) {
+                                                Icon(
+                                                    tab.icon,
+                                                    contentDescription = tab.label,
+                                                    tint = if (isSelected) OrangeAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Text(
+                                                    tab.label,
+                                                    fontSize = 10.sp,
+                                                    color = if (isSelected) OrangeAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1197,75 +1658,84 @@ fun VideoEditorScreen(
         }
     }
 
-    // Add Text Overlay Dialog
-    if (showTextDialog) {
+    // Autosave Project Recovery Dialog
+    pendingRecovery?.let { draft ->
         AlertDialog(
-            onDismissRequest = { showTextDialog = false },
-            title = { Text("Adicionar Texto / Legenda") },
+            onDismissRequest = { pendingRecovery = null },
+            title = { Text("Recuperar Projeto Guardado?") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = newOverlayText,
-                        onValueChange = { newOverlayText = it },
-                        label = { Text("Texto a exibir no vídeo") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = !newOverlaySubtitle,
-                            onClick = { newOverlaySubtitle = false },
-                            label = { Text("Título Central") }
-                        )
-                        FilterChip(
-                            selected = newOverlaySubtitle,
-                            onClick = { newOverlaySubtitle = true },
-                            label = { Text("Legenda Inferior") }
-                        )
-                    }
-                }
+                Text("Encontramos alterações locais não guardadas na nuvem (${draft.snapshot.clips.size} clipes, ${draft.snapshot.audioTracks.size} áudios). Deseja recuperar?")
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        if (newOverlayText.isNotBlank()) {
-                            textOverlays.add(
-                                VideoTextOverlay(
-                                    id = "vtxt_${UUID.randomUUID().toString().take(6)}",
-                                    text = newOverlayText.trim(),
-                                    yPositionFraction = if (newOverlaySubtitle) 0.85f else 0.5f,
-                                    isSubtitle = newOverlaySubtitle
-                                )
-                            )
-                        }
-                        showTextDialog = false
-                    }
-                ) { Text("Adicionar") }
+                        projectTitle = draft.title
+                        restoreSnapshot(draft.snapshot)
+                        pendingRecovery = null
+                        onShowMessage("Projeto recuperado com sucesso!")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
+                ) { Text("Recuperar") }
             },
-            dismissButton = { TextButton(onClick = { showTextDialog = false }) { Text("Cancelar") } }
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        VideoAutosaveStore.clearDraft(context, draftKey)
+                        pendingRecovery = null
+                    }
+                ) { Text("Descartar") }
+            }
         )
     }
 
-    // Export MP4 Dialog (-4 credits ONLY upon successful completion)
+    // Rename Project Dialog
+    if (showRenameDialog) {
+        var tempTitle by remember(projectTitle) { mutableStateOf(projectTitle) }
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text("Nome do Projeto") },
+            text = {
+                OutlinedTextField(
+                    value = tempTitle,
+                    onValueChange = { tempTitle = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (tempTitle.isNotBlank()) projectTitle = tempTitle.trim()
+                    showRenameDialog = false
+                }) { Text("Guardar") }
+            },
+            dismissButton = { TextButton(onClick = { showRenameDialog = false }) { Text("Cancelar") } }
+        )
+    }
+
+    // Pro Export MP4 Dialog (720p / 1080p / 4K + 24/30/60 FPS + Bitrate Quality + Preview)
     if (showExportModal) {
+        val estMb = ((totalDurationMs / 1000f).coerceAtLeast(3f) *
+            (exportRes.baseBitrate * exportQuality.bitrateMultiplier * (exportFps / 30f)) / 8_000_000f)
         AlertDialog(
             onDismissRequest = { if (!isExporting) showExportModal = false },
-            title = { Text("Exportar Vídeo MP4") },
+            title = { Text("Exportar Vídeo MP4 Pro") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Custo: 4 créditos (Saldo atual: $creditsBalance)")
-                    Text("Formato: MP4 H.264 • Proporção $aspectRatio", style = MaterialTheme.typography.bodySmall)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Proporção $aspectRatio • ${clips.size} clipes • ${audioTracks.size} áudios • ~%.1f MB".format(estMb),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text("Custo: 4 créditos (Saldo atual: $creditsBalance)", style = MaterialTheme.typography.labelMedium)
+
                     if (isExporting) {
                         LinearProgressIndicator(
                             progress = { exportProgress / 100f },
                             color = OrangeAccent,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Text("A renderizar vídeo: $exportProgress%", style = MaterialTheme.typography.labelMedium)
+                        Text("A renderizar MP4 (${exportRes.label} @ ${exportFps}fps): $exportProgress%", style = MaterialTheme.typography.labelMedium)
                     } else if (creditsBalance < 4L) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
+                        Surface(color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f), shape = RoundedCornerShape(10.dp)) {
                             Text(
                                 "Créditos insuficientes. São necessários 4 créditos para exportar vídeo.",
                                 color = MaterialTheme.colorScheme.error,
@@ -1274,64 +1744,98 @@ fun VideoEditorScreen(
                             )
                         }
                     } else {
-                        VideoResolutionPreset.entries.forEach { preset ->
-                            Button(
-                                onClick = {
-                                    if (clips.isEmpty()) {
-                                        onShowMessage("Adicione pelo menos 1 vídeo ou foto antes de exportar.")
-                                        return@Button
-                                    }
-                                    scope.launch {
-                                        isExporting = true
-                                        exportProgress = 0
-                                        val res = onReserveExport(
-                                            initialProject.id,
-                                            projectTitle,
-                                            "video_mp4",
-                                            preset.label,
-                                            4L,
-                                            "${projectTitle.take(24)}.mp4"
-                                        )
-                                        val exportId = res.getOrElse { err ->
-                                            isExporting = false
-                                            onShowMessage(err.localizedMessage ?: "Erro ao reservar exportação.")
-                                            return@launch
-                                        }
-                                        activeExportId = exportId
-                                        exportEngine.exportMp4(
-                                            projectTitle = projectTitle,
-                                            clips = clips.toList(),
-                                            audioUri = audioUri,
-                                            audioMuted = audioMuted,
-                                            textOverlays = textOverlays.toList(),
-                                            resolution = preset,
-                                            aspectRatio = aspectRatio,
-                                            onProgress = { pct -> exportProgress = pct },
-                                            onSuccess = { exported ->
-                                                scope.launch {
-                                                    onCompleteExport(exportId, 4L, "video_mp4", exported.fileSizeBytes)
-                                                    isExporting = false
-                                                    activeExportId = null
-                                                    showExportModal = false
-                                                    exportedResult = exported
-                                                    onShowMessage("Vídeo exportado para Filmes/CANVA AO! (-4 créditos)")
-                                                }
-                                            },
-                                            onError = { errMsg ->
-                                                scope.launch {
-                                                    onFailExport(exportId, false)
-                                                    isExporting = false
-                                                    activeExportId = null
-                                                    onShowMessage("Erro na exportação (nenhum crédito descontado): $errMsg")
-                                                }
-                                            }
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Exportar ${preset.label} (-4 Créditos)")
+                        Text("Resolução:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            VideoResolutionPreset.entries.forEach { preset ->
+                                FilterChip(
+                                    selected = exportRes == preset,
+                                    onClick = { exportRes = preset },
+                                    label = { Text(preset.label.substringBefore(' '), fontSize = 12.sp) }
+                                )
                             }
+                        }
+
+                        Text("Fotogramas (FPS):", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(24, 30, 60).forEach { f ->
+                                FilterChip(
+                                    selected = exportFps == f,
+                                    onClick = { exportFps = f },
+                                    label = { Text("$f FPS", fontSize = 12.sp) }
+                                )
+                            }
+                        }
+
+                        Text("Qualidade & Bitrate:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            VideoExportQuality.entries.forEach { q ->
+                                FilterChip(
+                                    selected = exportQuality == q,
+                                    onClick = { exportQuality = q },
+                                    label = { Text(q.label, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                if (clips.isEmpty()) {
+                                    onShowMessage("Adicione pelo menos 1 vídeo ou foto antes de exportar.")
+                                    return@Button
+                                }
+                                scope.launch {
+                                    isExporting = true
+                                    exportProgress = 0
+                                    val res = onReserveExport(
+                                        initialProject.id,
+                                        projectTitle,
+                                        "video_mp4",
+                                        "${exportRes.label} ${exportFps}fps",
+                                        4L,
+                                        "${projectTitle.take(24)}.mp4"
+                                    )
+                                    val exportId = res.getOrElse { err ->
+                                        isExporting = false
+                                        onShowMessage(err.localizedMessage ?: "Erro ao reservar exportação.")
+                                        return@launch
+                                    }
+                                    activeExportId = exportId
+                                    exportEngine.exportMp4(
+                                        projectTitle = projectTitle,
+                                        clips = clips.toList(),
+                                        resolution = exportRes,
+                                        aspectRatio = aspectRatio,
+                                        fps = exportFps,
+                                        quality = exportQuality,
+                                        audioTracks = audioTracks.toList(),
+                                        proOverlays = overlays.toList(),
+                                        onProgress = { pct -> exportProgress = pct },
+                                        onSuccess = { exported ->
+                                            scope.launch {
+                                                onCompleteExport(exportId, 4L, "video_mp4", exported.fileSizeBytes)
+                                                sound?.playSuccess()
+                                                isExporting = false
+                                                activeExportId = null
+                                                showExportModal = false
+                                                exportedResult = exported
+                                                onShowMessage("Vídeo exportado para Movies/CANVA AO! (-4 créditos)")
+                                            }
+                                        },
+                                        onError = { errMsg ->
+                                            scope.launch {
+                                                onFailExport(exportId, false)
+                                                isExporting = false
+                                                activeExportId = null
+                                                onShowMessage("Erro na exportação (nenhum crédito descontado): $errMsg")
+                                            }
+                                        }
+                                    )
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Iniciar Exportação (-4 Créditos)", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1349,30 +1853,24 @@ fun VideoEditorScreen(
                         if (isExporting) {
                             exportEngine.cancelExport()
                             val eid = activeExportId
-                            if (eid != null) {
-                                scope.launch { onFailExport(eid, true) }
-                            }
+                            if (eid != null) scope.launch { onFailExport(eid, true) }
                             isExporting = false
                             activeExportId = null
                             onShowMessage("Exportação cancelada. Nenhum crédito foi descontado.")
                         }
                         showExportModal = false
                     }
-                ) {
-                    Text(if (isExporting) "Cancelar Render" else "Fechar")
-                }
+                ) { Text(if (isExporting) "Cancelar Render" else "Fechar") }
             }
         )
     }
 
-    // Share after Export
+    // Post-Export Ready & Share Dialog
     exportedResult?.let { result ->
         AlertDialog(
             onDismissRequest = { exportedResult = null },
             title = { Text("Vídeo Pronto!", color = SuccessGreen) },
-            text = {
-                Text("Guardado na Galeria em Movies/CANVA AO (${result.fileName}).")
-            },
+            text = { Text("Guardado na Galeria em Movies/CANVA AO (${result.fileName}).") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -1390,40 +1888,7 @@ fun VideoEditorScreen(
                     Text("Partilhar")
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { exportedResult = null }) { Text("Concluir") }
-            }
-        )
-    }
-}
-
-private fun videoFilterColorMatrix(filter: VideoFilterKind): ColorMatrix? {
-    return when (filter) {
-        VideoFilterKind.NORMAL -> null
-        VideoFilterKind.BW -> ColorMatrix().apply { setToSaturation(0f) }
-        VideoFilterKind.WARM -> ColorMatrix(
-            floatArrayOf(
-                1.12f, 0f, 0f, 0f, 14f,
-                0f, 1.03f, 0f, 0f, 4f,
-                0f, 0f, 0.88f, 0f, 0f,
-                0f, 0f, 0f, 1f, 0f
-            )
-        )
-        VideoFilterKind.COOL -> ColorMatrix(
-            floatArrayOf(
-                0.9f, 0f, 0f, 0f, 0f,
-                0f, 1.0f, 0f, 0f, 4f,
-                0f, 0f, 1.15f, 0f, 14f,
-                0f, 0f, 0f, 1f, 0f
-            )
-        )
-        VideoFilterKind.CINEMA -> ColorMatrix(
-            floatArrayOf(
-                1.18f, 0f, 0f, 0f, -12f,
-                0f, 1.15f, 0f, 0f, -10f,
-                0f, 0f, 1.12f, 0f, -6f,
-                0f, 0f, 0f, 1f, 0f
-            )
+            dismissButton = { TextButton(onClick = { exportedResult = null }) { Text("Concluir") } }
         )
     }
 }
@@ -1436,16 +1901,26 @@ private fun extractVideoDurationMs(context: android.content.Context, uri: Uri): 
     } catch (_: Exception) {
         5000L
     } finally {
-        try {
-            retriever.release()
-        } catch (_: Exception) {
-        }
+        try { retriever.release() } catch (_: Exception) {}
     }
 }
 
-private fun formatDuration(ms: Long): String {
-    val totalSec = (ms / 1000L).coerceAtLeast(0L)
-    val min = totalSec / 60L
-    val sec = totalSec % 60L
-    return "%02d:%02d".format(min, sec)
+private fun inferVideoAspectRatio(width: Long, height: Long): String {
+    val w = width.coerceAtLeast(1L)
+    val h = height.coerceAtLeast(1L)
+    return when {
+        w == h -> "1:1"
+        w * 4L == h * 3L -> "3:4"
+        w * 5L == h * 4L -> "4:5"
+        w > h -> "16:9"
+        else -> "9:16"
+    }
+}
+
+private fun videoDimensionsForAspect(aspectRatio: String): Pair<Long, Long> = when (aspectRatio) {
+    "1:1" -> 1080L to 1080L
+    "3:4" -> 1080L to 1440L
+    "4:5" -> 1080L to 1350L
+    "16:9" -> 1920L to 1080L
+    else -> 1080L to 1920L
 }

@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.core.audio.LocalSoundEffects
 import com.example.core.model.DesignLayer
 import com.example.core.model.DesignTemplate
 import com.example.core.model.LayerType
@@ -66,6 +67,7 @@ fun AdminScreen(
 ) {
     BackHandler { onBack() }
 
+    val sound = LocalSoundEffects.current
     val usersState by viewModel.adminUsersState.collectAsStateWithLifecycle()
     val exportsState by viewModel.adminExportsState.collectAsStateWithLifecycle()
     val adsState by viewModel.adminRewardAdsState.collectAsStateWithLifecycle()
@@ -89,7 +91,13 @@ fun AdminScreen(
                         .padding(horizontal = 8.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onBack, modifier = Modifier.minimumInteractiveComponentSize()) {
+                    IconButton(
+                        onClick = {
+                            sound?.playTap()
+                            onBack()
+                        },
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
                     Text("Painel Administrativo", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
@@ -108,11 +116,26 @@ fun AdminScreen(
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = OrangeAccent
             ) {
-                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Estatísticas") })
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Utilizadores") })
-                Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Templates") })
-                Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Catálogo & Avisos") })
-                Tab(selected = selectedTab == 4, onClick = { selectedTab = 4 }, text = { Text("Denúncias") })
+                Tab(selected = selectedTab == 0, onClick = {
+                    sound?.playTap()
+                    selectedTab = 0
+                }, text = { Text("Estatísticas") })
+                Tab(selected = selectedTab == 1, onClick = {
+                    sound?.playTap()
+                    selectedTab = 1
+                }, text = { Text("Utilizadores") })
+                Tab(selected = selectedTab == 2, onClick = {
+                    sound?.playTap()
+                    selectedTab = 2
+                }, text = { Text("Templates") })
+                Tab(selected = selectedTab == 3, onClick = {
+                    sound?.playTap()
+                    selectedTab = 3
+                }, text = { Text("Catálogo & Avisos") })
+                Tab(selected = selectedTab == 4, onClick = {
+                    sound?.playTap()
+                    selectedTab = 4
+                }, text = { Text("Denúncias") })
             }
 
             when (selectedTab) {
@@ -177,7 +200,10 @@ fun AdminScreen(
                                     OutlinedTextField(value = tplHeadline, onValueChange = { tplHeadline = it }, label = { Text("Título Editável") }, modifier = Modifier.fillMaxWidth())
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                                         Text("Template Premium (PRO)")
-                                        Switch(checked = tplPremium, onCheckedChange = { tplPremium = it })
+                                        Switch(checked = tplPremium, onCheckedChange = {
+                                            sound?.playTap()
+                                            tplPremium = it
+                                        })
                                     }
                                     Button(
                                         onClick = {
@@ -235,7 +261,10 @@ fun AdminScreen(
                                         Text(tpl.name, style = MaterialTheme.typography.titleSmall)
                                         Text("${tpl.category} • ${if (tpl.premium) "PRO" else "Grátis"}", style = MaterialTheme.typography.labelSmall)
                                     }
-                                    IconButton(onClick = { viewModel.adminDeleteTemplate(tpl.id) }) {
+                                    IconButton(onClick = {
+                                        sound?.playTap()
+                                        viewModel.adminDeleteTemplate(tpl.id)
+                                    }) {
                                         Icon(Icons.Filled.Delete, contentDescription = "Remover template", tint = ErrorRed)
                                     }
                                 }

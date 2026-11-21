@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -54,6 +55,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.core.audio.LocalSoundEffects
 import com.example.core.model.CategoryEntry
 import com.example.core.model.DesignTemplate
 import com.example.core.model.UiState
@@ -75,37 +77,44 @@ fun TemplatesScreen(
     onToggleFavorite: (DesignTemplate) -> Unit,
     onUseTemplate: (DesignTemplate) -> Unit
 ) {
+    val sound = LocalSoundEffects.current
     val authUser = remember { Firebase.auth.currentUser }
     val userAvatarUrl = userProfile?.photoUrl?.takeIf { it.isNotBlank() } ?: authUser?.photoUrl?.toString()
     val userDisplayName = userProfile?.displayName?.takeIf { it.isNotBlank() } ?: authUser?.displayName
     val userHandle = remember(userProfile, authUser) {
         val em = userProfile?.email?.takeIf { it.isNotBlank() } ?: authUser?.email.orEmpty()
-        val prefix = em.substringBefore("@").ifBlank {
+        val prefix = if (em.contains("@")) {
+            em.substringBefore("@")
+        } else {
             (userDisplayName ?: "criador").lowercase().replace(Regex("[^a-z0-9]"), "")
         }
         "@${prefix.ifBlank { "criador" }}"
     }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember(initialCategoryFilter) { mutableStateOf(initialCategoryFilter) }
-    var priceFilter by remember { mutableStateOf("Todos") } // Todos, Gratuitos, Premium, Favoritos
+    var priceFilter by remember { mutableStateOf("Todos") } // Todos, Imagens, Vídeos, Gratuitos, Premium, Favoritos
+    var ratioFilter by remember { mutableStateOf("Todas") } // Todas, 1:1, 3:4, 4:5, 16:9, 9:16
     var previewTemplate by remember { mutableStateOf<DesignTemplate?>(null) }
 
     val templates = (templatesState as? UiState.Success)?.data.orEmpty()
     val categories = listOf("Todos") + ((categoriesState as? UiState.Success)?.data.orEmpty().map { it.name })
 
-    val filtered = remember(templates, searchQuery, selectedCategory, priceFilter, favoriteIds) {
+    val filtered = remember(templates, searchQuery, selectedCategory, priceFilter, ratioFilter, favoriteIds) {
         templates.filter { tpl ->
             val matchQuery = searchQuery.isBlank() ||
                 tpl.name.contains(searchQuery, ignoreCase = true) ||
                 tpl.category.contains(searchQuery, ignoreCase = true)
             val matchCat = selectedCategory == "Todos" || tpl.category.equals(selectedCategory, ignoreCase = true)
             val matchPrice = when (priceFilter) {
+                "Imagens" -> tpl.templateType != "video"
+                "Vídeos" -> tpl.templateType == "video"
                 "Gratuitos" -> !tpl.premium
                 "Premium" -> tpl.premium
                 "Favoritos" -> tpl.id in favoriteIds
                 else -> true
             }
-            matchQuery && matchCat && matchPrice
+            val matchRatio = ratioFilter == "Todas" || tpl.effectiveAspectRatio() == ratioFilter
+            matchQuery && matchCat && matchPrice && matchRatio
         }
     }
 
@@ -145,10 +154,13 @@ fun TemplatesScreen(
             )
 
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(listOf("Todos", "Gratuitos", "Premium", "Favoritos")) { filter ->
+                items(listOf("Todos", "Imagens", "Vídeos", "Gratuitos", "Premium", "Favoritos")) { filter ->
                     FilterChip(
                         selected = priceFilter == filter,
-                        onClick = { priceFilter = filter },
+                        onClick = {
+                            sound?.playTap()
+                            priceFilter = filter
+                        },
                         label = { Text(filter) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = OrangeAccent,
@@ -159,10 +171,30 @@ fun TemplatesScreen(
             }
 
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(listOf("Todas", "1:1", "3:4", "4:5", "16:9", "9:16")) { ratio ->
+                    FilterChip(
+                        selected = ratioFilter == ratio,
+                        onClick = {
+                            sound?.playTap()
+                            ratioFilter = ratio
+                        },
+                        label = { Text(if (ratio == "Todas") "Proporção: Todas" else ratio) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = Color.White
+                        )
+                    )
+                }
+            }
+
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(categories) { cat ->
                     FilterChip(
                         selected = selectedCategory == cat,
-                        onClick = { selectedCategory = cat },
+                        onClick = {
+                            sound?.playTap()
+                            selectedCategory = cat
+                        },
                         label = { Text(cat) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.secondary,
@@ -200,7 +232,10 @@ fun TemplatesScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(18.dp))
-                            .clickable { previewTemplate = tpl }
+                            .clickable {
+                                sound?.playTap()
+                                previewTemplate = tpl
+                            }
                             .testTag("templates_grid_item_${tpl.id}"),
                         color = MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(18.dp),
@@ -223,22 +258,62 @@ fun TemplatesScreen(
                                     userHandle = userHandle,
                                     modifier = Modifier.fillMaxSize()
                                 )
-                                Surface(
-                                    color = if (tpl.premium) OrangeAccent else Color.Black.copy(alpha = 0.55f),
-                                    shape = RoundedCornerShape(8.dp),
+                                Row(
                                     modifier = Modifier
                                         .align(Alignment.TopStart)
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Surface(
+                                        color = if (tpl.premium) OrangeAccent else Color.Black.copy(alpha = 0.55f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(
+                                            text = if (tpl.premium) "PRO" else "Grátis",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    if (tpl.templateType == "video") {
+                                        Surface(
+                                            color = Color(0xFF4F46E5).copy(alpha = 0.9f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
+                                                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                                                Text(
+                                                    text = "VÍDEO",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Surface(
+                                    color = Color.Black.copy(alpha = 0.65f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
                                         .padding(8.dp)
                                 ) {
                                     Text(
-                                        text = if (tpl.premium) "PRO" else "Grátis",
+                                        text = tpl.effectiveAspectRatio(),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = Color.White,
                                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                                     )
                                 }
                                 IconButton(
-                                    onClick = { onToggleFavorite(tpl) },
+                                    onClick = {
+                                        sound?.playTap()
+                                        onToggleFavorite(tpl)
+                                    },
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
                                         .size(36.dp)
@@ -260,7 +335,7 @@ fun TemplatesScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "${tpl.category} • ${tpl.width}×${tpl.height}",
+                                    text = "${tpl.category} • ${tpl.effectiveAspectRatio()}",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1
@@ -294,13 +369,17 @@ fun TemplatesScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(tpl.name, style = MaterialTheme.typography.titleLarge)
+                        val typeSummary = if (tpl.templateType == "video") "Vídeo (${tpl.videoClips.size} cenas)" else "Imagem"
                         Text(
-                            "${tpl.category} • ${tpl.width} × ${tpl.height} px • ${if (tpl.premium) "Premium" else "Gratuito"}",
+                            "${tpl.category} • ${tpl.effectiveAspectRatio()} (${tpl.width} × ${tpl.height} px) • $typeSummary • ${if (tpl.premium) "Premium" else "Gratuito"}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = { onToggleFavorite(tpl) }) {
+                    IconButton(onClick = {
+                        sound?.playTap()
+                        onToggleFavorite(tpl)
+                    }) {
                         Icon(
                             imageVector = if (isFav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                             contentDescription = "Favorito",
@@ -356,6 +435,7 @@ fun TemplatesScreen(
 
                 Button(
                     onClick = {
+                        sound?.playCreate()
                         previewTemplate = null
                         onUseTemplate(tpl)
                     },
@@ -367,9 +447,12 @@ fun TemplatesScreen(
                         .minimumInteractiveComponentSize()
                         .testTag("use_template_button")
                 ) {
-                    Icon(Icons.Filled.Edit, contentDescription = null)
+                    Icon(if (tpl.templateType == "video") Icons.Filled.PlayArrow else Icons.Filled.Edit, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Personalizar Template no Editor", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (tpl.templateType == "video") "Personalizar Vídeo no Editor" else "Personalizar Template no Editor",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

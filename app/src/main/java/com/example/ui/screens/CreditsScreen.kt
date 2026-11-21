@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.core.audio.LocalSoundEffects
 import com.example.core.model.CreditTransaction
 import com.example.core.model.ExportRecord
 import com.example.core.model.RewardAdLog
@@ -86,6 +87,7 @@ fun CreditsScreen(
 ) {
     BackHandler { onBack() }
 
+    val sound = LocalSoundEffects.current
     val adController = remember { RewardedAdController() }
     val credits = (creditsState as? UiState.Success)?.data ?: UserCredits()
     val transactions = (transactionsState as? UiState.Success)?.data.orEmpty()
@@ -105,7 +107,13 @@ fun CreditsScreen(
                         .padding(horizontal = 8.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onBack, modifier = Modifier.minimumInteractiveComponentSize()) {
+                    IconButton(
+                        onClick = {
+                            sound?.playTap()
+                            onBack()
+                        },
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
                     Text(
@@ -182,6 +190,7 @@ fun CreditsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
+                            sound?.playTap()
                             activeAdKey = adController.generateIdempotencyKey()
                         },
                         enabled = !claimingAd,
@@ -212,9 +221,18 @@ fun CreditsScreen(
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = OrangeAccent
             ) {
-                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Histórico") })
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Anúncios") })
-                Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Exportações") })
+                Tab(selected = selectedTab == 0, onClick = {
+                    sound?.playTap()
+                    selectedTab = 0
+                }, text = { Text("Histórico") })
+                Tab(selected = selectedTab == 1, onClick = {
+                    sound?.playTap()
+                    selectedTab = 1
+                }, text = { Text("Anúncios") })
+                Tab(selected = selectedTab == 2, onClick = {
+                    sound?.playTap()
+                    selectedTab = 2
+                }, text = { Text("Exportações") })
             }
 
             when (selectedTab) {
@@ -358,8 +376,9 @@ fun CreditsScreen(
             onCompleted = {
                 activeAdKey = null
                 claimingAd = true
-                onClaimRewardedAd(RewardedAdController.TEST_REWARDED_AD_UNIT_ID, key) { _, msg ->
+                onClaimRewardedAd(RewardedAdController.TEST_REWARDED_AD_UNIT_ID, key) { ok, msg ->
                     claimingAd = false
+                    if (ok) sound?.playSuccess()
                     onShowMessage(msg)
                 }
             }

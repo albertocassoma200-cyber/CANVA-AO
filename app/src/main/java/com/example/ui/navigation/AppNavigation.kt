@@ -42,9 +42,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,8 +70,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.example.core.audio.LocalSoundEffects
+import com.example.core.audio.SoundEffectsManager
 import com.example.core.model.UiState
 import com.example.core.model.UserCredits
+import com.example.core.preferences.UserPreferencesDataStore
 import com.example.data.repository.authStateFlow
 import com.example.data.repository.signOut
 import com.example.ui.components.CreateOptionsBottomSheet
@@ -77,6 +83,7 @@ import com.example.ui.screens.AiStudioScreen
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.CreditsScreen
 import com.example.ui.screens.DesignEditorScreen
+import com.example.ui.screens.EmailVerificationGateScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.ProjectsScreen
@@ -88,6 +95,7 @@ import com.example.ui.theme.OrangeAccent
 import com.example.ui.viewmodel.AiStudioViewModel
 import com.example.ui.viewmodel.MainViewModel
 import com.google.firebase.Firebase
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
 import kotlinx.serialization.Serializable
 
@@ -103,30 +111,63 @@ import kotlinx.serialization.Serializable
 
 @Composable
 fun CanvaAoRootApp() {
+    val context = LocalContext.current
+    val prefs = remember(context) { UserPreferencesDataStore(context.applicationContext) }
+    val persistedSoundEnabled by prefs.soundEnabledFlow.collectAsStateWithLifecycle(initialValue = true)
+    val soundManager = remember(context) { SoundEffectsManager(context) }
+
+    LaunchedEffect(persistedSoundEnabled) {
+        soundManager.enabled = persistedSoundEnabled
+    }
+    DisposableEffect(soundManager) {
+        onDispose { soundManager.release() }
+    }
+
     val authFlow = remember { Firebase.auth.authStateFlow() }
     val currentUser by authFlow.collectAsStateWithLifecycle(initialValue = Firebase.auth.currentUser)
 
-    val user = currentUser
-    if (user == null) {
-        CanvaAoTheme(themeMode = "dark") {
-            AuthScreen(onAuthSuccess = {})
-        }
-    } else {
-        key(user.uid) {
-            val mainViewModel: MainViewModel = viewModel(
-                factory = MainViewModel.provideFactory(
-                    userId = user.uid,
-                    email = user.email.orEmpty()
-                )
-            )
-            val aiViewModel: AiStudioViewModel = viewModel()
-            val themeMode by mainViewModel.themeMode.collectAsStateWithLifecycle()
+    CompositionLocalProvider(LocalSoundEffects provides soundManager) {
+        val user = currentUser
+        val credentialManager = remember(context) { CredentialManager.create(context) }
+        val scope = rememberCoroutineScope()
+        if (user == null) {
+            CanvaAoTheme(themeMode = "dark") {
+                AuthScreen(onAuthSuccess = {})
+            }
+        } else {
+            val isGoogleAccount = remember(user.uid, user.providerData) {
+                user.providerData.any { it.providerId == GoogleAuthProvider.PROVIDER_ID }
+            }
+            var emailVerifiedGatePassed by remember(user.uid, user.isEmailVerified) {
+                mutableStateOf(user.isEmailVerified || isGoogleAccount)
+            }
+            if (!emailVerifiedGatePassed) {
+                CanvaAoTheme(themeMode = "dark") {
+                    EmailVerificationGateScreen(
+                        email = user.email.orEmpty(),
+                        onVerified = { emailVerifiedGatePassed = true },
+                        onSignOut = { signOut(credentialManager, scope) }
+                    )
+                }
+            } else {
+                key(user.uid) {
+                    val mainViewModel: MainViewModel = viewModel(
+                        key = user.uid,
+                        factory = MainViewModel.provideFactory(
+                            userId = user.uid,
+                            email = user.email.orEmpty()
+                        )
+                    )
+                    val aiViewModel: AiStudioViewModel = viewModel(key = "ai_${user.uid}")
+                    val themeMode by mainViewModel.themeMode.collectAsStateWithLifecycle()
 
-            CanvaAoTheme(themeMode = themeMode) {
-                AuthenticatedAppShell(
-                    mainViewModel = mainViewModel,
-                    aiViewModel = aiViewModel
-                )
+                    CanvaAoTheme(themeMode = themeMode) {
+                        AuthenticatedAppShell(
+                            mainViewModel = mainViewModel,
+                            aiViewModel = aiViewModel
+                        )
+                    }
+                }
             }
         }
     }
@@ -159,6 +200,11 @@ private fun AuthenticatedAppShell(
     val language by mainViewModel.language.collectAsStateWithLifecycle()
     val soundEnabled by mainViewModel.soundEnabled.collectAsStateWithLifecycle()
     val snackbarMessage by mainViewModel.snackbarMessage.collectAsStateWithLifecycle()
+
+    val soundManager = LocalSoundEffects.current ?: remember(context) { SoundEffectsManager(context) }
+    LaunchedEffect(soundEnabled) {
+        soundManager.enabled = soundEnabled
+    }
 
     LaunchedEffect(snackbarMessage) {
         val msg = snackbarMessage
@@ -211,6 +257,7 @@ private fun AuthenticatedAppShell(
             dest.hasRoute<ProfileRoute>()
     } ?: true
 
+    CompositionLocalProvider(LocalSoundEffects provides soundManager) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isWideScreen = maxWidth >= 700.dp
 
@@ -225,19 +272,26 @@ private fun AuthenticatedAppShell(
                         isProjects = currentDest?.hasRoute<ProjectsRoute>() == true,
                         isProfile = currentDest?.hasRoute<ProfileRoute>() == true,
                         onSelectHome = {
+                            soundManager.playTap()
                             navController.navigate(HomeRoute) {
                                 launchSingleTop = true
                                 popUpTo(HomeRoute) { inclusive = false }
                             }
                         },
                         onSelectTemplates = {
+                            soundManager.playTap()
                             navController.navigate(TemplatesRoute("Todos")) { launchSingleTop = true }
                         },
-                        onOpenCreate = { showCreateSheet = true },
+                        onOpenCreate = {
+                            soundManager.playCreate()
+                            showCreateSheet = true
+                        },
                         onSelectProjects = {
+                            soundManager.playTap()
                             navController.navigate(ProjectsRoute) { launchSingleTop = true }
                         },
                         onSelectProfile = {
+                            soundManager.playTap()
                             navController.navigate(ProfileRoute(false)) { launchSingleTop = true }
                         }
                     )
@@ -256,7 +310,10 @@ private fun AuthenticatedAppShell(
                     ) {
                         Spacer(modifier = Modifier.height(12.dp))
                         FloatingActionButton(
-                            onClick = { showCreateSheet = true },
+                            onClick = {
+                                soundManager.playCreate()
+                                showCreateSheet = true
+                            },
                             containerColor = OrangeAccent,
                             contentColor = Color.White,
                             shape = CircleShape
@@ -266,25 +323,37 @@ private fun AuthenticatedAppShell(
                         Spacer(modifier = Modifier.height(16.dp))
                         NavigationRailItem(
                             selected = currentDest?.hasRoute<HomeRoute>() == true,
-                            onClick = { navController.navigate(HomeRoute) { launchSingleTop = true } },
+                            onClick = {
+                                soundManager.playTap()
+                                navController.navigate(HomeRoute) { launchSingleTop = true }
+                            },
                             icon = { Icon(Icons.Filled.Home, contentDescription = "Início") },
                             label = { Text("Início") }
                         )
                         NavigationRailItem(
                             selected = currentDest?.hasRoute<TemplatesRoute>() == true,
-                            onClick = { navController.navigate(TemplatesRoute("Todos")) { launchSingleTop = true } },
+                            onClick = {
+                                soundManager.playTap()
+                                navController.navigate(TemplatesRoute("Todos")) { launchSingleTop = true }
+                            },
                             icon = { Icon(Icons.Filled.GridView, contentDescription = "Modelos") },
                             label = { Text("Modelos") }
                         )
                         NavigationRailItem(
                             selected = currentDest?.hasRoute<ProjectsRoute>() == true,
-                            onClick = { navController.navigate(ProjectsRoute) { launchSingleTop = true } },
+                            onClick = {
+                                soundManager.playTap()
+                                navController.navigate(ProjectsRoute) { launchSingleTop = true }
+                            },
                             icon = { Icon(Icons.Filled.FolderOpen, contentDescription = "Projetos") },
                             label = { Text("Projetos") }
                         )
                         NavigationRailItem(
                             selected = currentDest?.hasRoute<ProfileRoute>() == true,
-                            onClick = { navController.navigate(ProfileRoute(false)) { launchSingleTop = true } },
+                            onClick = {
+                                soundManager.playTap()
+                                navController.navigate(ProfileRoute(false)) { launchSingleTop = true }
+                            },
                             icon = { Icon(Icons.Filled.Person, contentDescription = "Perfil") },
                             label = { Text("Perfil") }
                         )
@@ -312,7 +381,11 @@ private fun AuthenticatedAppShell(
                                 onCategorySelected = { cat -> navController.navigate(TemplatesRoute(cat)) },
                                 onTemplateClick = { tpl ->
                                     mainViewModel.openTemplateInEditor(tpl)
-                                    navController.navigate(DesignEditorRoute)
+                                    if (tpl.templateType == "video") {
+                                        navController.navigate(VideoEditorRoute)
+                                    } else {
+                                        navController.navigate(DesignEditorRoute)
+                                    }
                                 },
                                 onToggleTemplateFavorite = { tpl ->
                                     mainViewModel.toggleTemplateFavorite(tpl.id, tpl.id in favoriteIds)
@@ -343,7 +416,11 @@ private fun AuthenticatedAppShell(
                                 },
                                 onUseTemplate = { tpl ->
                                     mainViewModel.openTemplateInEditor(tpl)
-                                    navController.navigate(DesignEditorRoute)
+                                    if (tpl.templateType == "video") {
+                                        navController.navigate(VideoEditorRoute)
+                                    } else {
+                                        navController.navigate(DesignEditorRoute)
+                                    }
                                 }
                             )
                         }
@@ -401,10 +478,18 @@ private fun AuthenticatedAppShell(
                             AiStudioScreen(
                                 aiViewModel = aiViewModel,
                                 currentUserId = mainViewModel.currentUserId,
-                                onBack = { navController.popBackStack() },
+                                onBack = {
+                                    soundManager.playTap()
+                                    navController.popBackStack()
+                                },
                                 onOpenAiProjectInEditor = { proj ->
+                                    soundManager.playCreate()
                                     mainViewModel.openAiProjectInEditor(proj)
                                     navController.navigate(DesignEditorRoute)
+                                },
+                                onSaveAsTemplate = { tpl ->
+                                    soundManager.playSuccess()
+                                    mainViewModel.saveAiDesignAsTemplate(tpl)
                                 },
                                 onShowMessage = mainViewModel::showMessage
                             )
@@ -466,18 +551,22 @@ private fun AuthenticatedAppShell(
         CreateOptionsBottomSheet(
             onDismiss = { showCreateSheet = false },
             onSelectDesignFormat = { format, prefix ->
+                soundManager.playCreate()
                 mainViewModel.openNewDesignFormat(format, prefix)
                 navController.navigate(DesignEditorRoute)
             },
             onSelectCustomDimensions = { title, w, h ->
+                soundManager.playCreate()
                 mainViewModel.openCustomDesign(title, w, h)
                 navController.navigate(DesignEditorRoute)
             },
             onSelectVideoEditor = {
+                soundManager.playCreate()
                 mainViewModel.openNewVideoProject()
                 navController.navigate(VideoEditorRoute)
             }
         )
+    }
     }
 }
 

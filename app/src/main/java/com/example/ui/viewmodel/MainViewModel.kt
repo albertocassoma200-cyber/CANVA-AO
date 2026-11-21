@@ -32,27 +32,35 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 import java.util.UUID
 
 class MainViewModel(
     private val repository: CanvaAoRepository,
     private val prefs: UserPreferencesDataStore,
+    private val appFilesDir: File,
     val currentUserId: String,
     val currentUserEmail: String
 ) : ViewModel() {
 
+    private val _customAiTemplates = MutableStateFlow<List<DesignTemplate>>(emptyList())
 
     init {
         viewModelScope.launch {
+            _customAiTemplates.value = readCustomAiTemplatesFromDisk()
             Firebase.auth.currentUser?.let { user ->
                 repository.ensureUserInitialized(user)
             }
@@ -104,12 +112,13 @@ class MainViewModel(
         repository.observeUserProjects(currentUserId).toUiState()
 
     val templatesState: StateFlow<UiState<List<DesignTemplate>>> =
-        repository.observeTemplates()
-            .map { remote ->
-                val remoteIds = remote.map { it.id }.toSet()
-                remote + TemplateSeedCatalog.builtInTemplates.filterNot { it.id in remoteIds }
-            }
-            .toUiState(UiState.Success(TemplateSeedCatalog.builtInTemplates))
+        combine(
+            _customAiTemplates,
+            repository.observeTemplates()
+        ) { customAi, remote ->
+            val takenIds = (customAi.map { it.id } + remote.map { it.id }).toSet()
+            customAi + remote + TemplateSeedCatalog.builtInTemplates.filterNot { it.id in takenIds }
+        }.toUiState(UiState.Success(TemplateSeedCatalog.builtInTemplates))
 
     val categoriesState: StateFlow<UiState<List<CategoryEntry>>> =
         repository.observeCategories()
@@ -177,22 +186,41 @@ class MainViewModel(
             displayName = profile?.displayName?.takeIf { it.isNotBlank() } ?: firebaseUser?.displayName,
             email = profile?.email?.takeIf { it.isNotBlank() } ?: firebaseUser?.email ?: currentUserEmail
         )
-        _activeDesignProject.value = DesignProject(
-            id = "",
-            userId = currentUserId,
-            title = template.name,
-            category = template.category,
-            formatName = "${template.width}×${template.height}",
-            width = template.width,
-            height = template.height,
-            backgroundColorHex = template.backgroundColorHex,
-            backgroundGradientHex = template.backgroundGradientHex,
-            layers = resolvedLayers,
-            videoClips = emptyList(),
-            projectType = "design",
-            favorite = false,
-            thumbnailText = template.name
-        )
+        if (template.templateType == "video") {
+            _activeVideoProject.value = DesignProject(
+                id = "",
+                userId = currentUserId,
+                title = template.name,
+                category = template.category,
+                formatName = "${template.effectiveAspectRatio()} Vídeo",
+                width = template.width,
+                height = template.height,
+                backgroundColorHex = template.backgroundColorHex,
+                backgroundGradientHex = template.backgroundGradientHex,
+                layers = resolvedLayers,
+                videoClips = template.videoClips,
+                projectType = "video",
+                favorite = false,
+                thumbnailText = template.name
+            )
+        } else {
+            _activeDesignProject.value = DesignProject(
+                id = "",
+                userId = currentUserId,
+                title = template.name,
+                category = template.category,
+                formatName = "${template.width}×${template.height}",
+                width = template.width,
+                height = template.height,
+                backgroundColorHex = template.backgroundColorHex,
+                backgroundGradientHex = template.backgroundGradientHex,
+                layers = resolvedLayers,
+                videoClips = emptyList(),
+                projectType = "design",
+                favorite = false,
+                thumbnailText = template.name
+            )
+        }
     }
 
     fun openNewDesignFormat(format: DesignFormat, titlePrefix: String = "Novo Design") {
@@ -214,6 +242,90 @@ class MainViewModel(
 
     fun openAiProjectInEditor(project: DesignProject) {
         _activeDesignProject.value = project.copy(id = "", userId = currentUserId)
+    }
+
+    fun saveAiDesignAsTemplate(template: DesignTemplate) {
+        val current = _customAiTemplates.value
+        val updated = listOf(template) + current.filterNot { it.id == template.id }
+        _customAiTemplates.value = updated
+        _snackbarMessage.value = "Template \"${template.name}\" guardado em Modelos!"
+        viewModelScope.launch(Dispatchers.IO) {
+            writeCustomAiTemplatesToDisk(updated)
+        }
+    }
+
+    private fun aiTemplatesFile(): File = File(appFilesDir, "ai_templates_${currentUserId}.json")
+
+    private fun readCustomAiTemplatesFromDisk(): List<DesignTemplate> {
+        return try {
+            val file = aiTemplatesFile()
+            if (!file.exists()) return emptyList()
+            val arr = JSONArray(file.readText())
+            (0 until arr.length()).mapNotNull { idx ->
+                val obj = arr.optJSONObject(idx) ?: return@mapNotNull null
+                val layersArr = obj.optJSONArray("layers") ?: JSONArray()
+                val parsedLayers = (0 until layersArr.length()).mapNotNull { lIdx ->
+                    val lObj = layersArr.optJSONObject(lIdx) ?: return@mapNotNull null
+                    val map = mutableMapOf<String, Any>()
+                    val keys = lObj.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        map[k] = lObj.get(k)
+                    }
+                    map
+                }
+                val fontsArr = obj.optJSONArray("fontsUsed") ?: JSONArray()
+                val colorsArr = obj.optJSONArray("colorsUsed") ?: JSONArray()
+                DesignTemplate(
+                    id = obj.optString("id", "ai_tpl_$idx"),
+                    name = obj.optString("name", "Template IA"),
+                    category = obj.optString("category", "Publicidade"),
+                    previewStyle = obj.optString("previewStyle", "ai_studio"),
+                    width = obj.optLong("width", 1080L),
+                    height = obj.optLong("height", 1350L),
+                    backgroundColorHex = obj.optString("backgroundColorHex", "#0A1628"),
+                    backgroundGradientHex = obj.optString("backgroundGradientHex").takeIf { it.isNotBlank() },
+                    layers = parsedLayers,
+                    fontsUsed = (0 until fontsArr.length()).map { fontsArr.optString(it) },
+                    colorsUsed = (0 until colorsArr.length()).map { colorsArr.optString(it) },
+                    premium = obj.optBoolean("premium", false),
+                    published = true
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read AI templates", e)
+            emptyList()
+        }
+    }
+
+    private fun writeCustomAiTemplatesToDisk(templates: List<DesignTemplate>) {
+        try {
+            val arr = JSONArray()
+            templates.forEach { tpl ->
+                val obj = JSONObject().apply {
+                    put("id", tpl.id)
+                    put("name", tpl.name)
+                    put("category", tpl.category)
+                    put("previewStyle", tpl.previewStyle)
+                    put("width", tpl.width)
+                    put("height", tpl.height)
+                    put("backgroundColorHex", tpl.backgroundColorHex)
+                    put("backgroundGradientHex", tpl.backgroundGradientHex ?: "")
+                    put("premium", tpl.premium)
+                    put("fontsUsed", JSONArray(tpl.fontsUsed))
+                    put("colorsUsed", JSONArray(tpl.colorsUsed))
+                    val layersArr = JSONArray()
+                    tpl.layers.forEach { layerMap ->
+                        layersArr.put(JSONObject(layerMap))
+                    }
+                    put("layers", layersArr)
+                }
+                arr.put(obj)
+            }
+            aiTemplatesFile().writeText(arr.toString())
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to persist AI templates", e)
+        }
     }
 
     fun openNewVideoProject(title: String = "Novo Vídeo") {
@@ -521,7 +633,7 @@ class MainViewModel(
 
     companion object {
         private const val TAG = "MainViewModel"
-        private const val STOP_TIMEOUT_MILLIS = 5000L
+        private const val STOP_TIMEOUT_MILLIS = 0L
 
         fun provideFactory(userId: String, email: String): ViewModelProvider.Factory = viewModelFactory {
             initializer {
@@ -529,6 +641,7 @@ class MainViewModel(
                 MainViewModel(
                     repository = CanvaAoRepository(app),
                     prefs = UserPreferencesDataStore(app),
+                    appFilesDir = app.filesDir,
                     currentUserId = userId,
                     currentUserEmail = email
                 )

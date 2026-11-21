@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Newspaper
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
@@ -66,10 +67,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import com.example.R
+import com.example.core.audio.LocalSoundEffects
 import com.example.core.model.CategoryEntry
 import com.example.core.model.DesignProject
 import com.example.core.model.DesignTemplate
@@ -77,12 +83,14 @@ import com.example.core.model.NotificationItem
 import com.example.core.model.UiState
 import com.example.core.model.UserCredits
 import com.example.core.model.UserProfile
+import com.example.ui.components.CanvaAoLogoMark
 import com.example.ui.components.CanvaAoWordmark
 import com.example.ui.components.CreditPillBadge
 import com.example.ui.components.DesignCanvasThumbnail
 import com.example.ui.theme.CyanGlow
 import com.example.ui.theme.ElectricIndigo
 import com.example.ui.theme.ElectricViolet
+import com.example.ui.theme.NavyPrimary
 import com.example.ui.theme.OrangeAccent
 import com.example.ui.theme.OrangeBright
 import com.google.firebase.Firebase
@@ -109,13 +117,16 @@ fun HomeScreen(
     onSeeAllProjects: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    val sound = LocalSoundEffects.current
     val profile = (userProfileState as? UiState.Success)?.data
     val authUser = remember { Firebase.auth.currentUser }
     val userAvatarUrl = profile?.photoUrl?.takeIf { it.isNotBlank() } ?: authUser?.photoUrl?.toString()
     val userDisplayName = profile?.displayName?.takeIf { it.isNotBlank() } ?: authUser?.displayName
     val userHandle = remember(profile, authUser) {
         val em = profile?.email?.takeIf { it.isNotBlank() } ?: authUser?.email.orEmpty()
-        val prefix = em.substringBefore("@").ifBlank {
+        val prefix = if (em.contains("@")) {
+            em.substringBefore("@")
+        } else {
             (userDisplayName ?: "criador").lowercase().replace(Regex("[^a-z0-9]"), "")
         }
         "@${prefix.ifBlank { "criador" }}"
@@ -159,9 +170,15 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        CreditPillBadge(balance = credits, onClick = onCreditsClick)
+                        CreditPillBadge(balance = credits, onClick = {
+                            sound?.playTap()
+                            onCreditsClick()
+                        })
                         IconButton(
-                            onClick = onNotificationsClick,
+                            onClick = {
+                                sound?.playTap()
+                                onNotificationsClick()
+                            },
                             modifier = Modifier
                                 .minimumInteractiveComponentSize()
                                 .testTag("home_notifications_button")
@@ -221,85 +238,84 @@ fun HomeScreen(
             }
         }
 
-        // 2. Hero Promotional Banner (matching mockup)
+        // 2. Hero Promotional Banner with matching studio artwork
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 18.dp)
                     .clip(RoundedCornerShape(22.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(ElectricIndigo, ElectricViolet, OrangeAccent.copy(alpha = 0.9f))
-                        )
-                    )
-                    .padding(20.dp)
+                    .background(NavyPrimary)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Image(
+                    painter = painterResource(id = R.drawable.img_hero_ideas),
+                    contentDescription = "Dê vida às suas ideias",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                0.0f to NavyPrimary.copy(alpha = 0.94f),
+                                0.56f to ElectricIndigo.copy(alpha = 0.80f),
+                                1.0f to Color.Transparent
+                            )
+                        )
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.76f)
+                        .padding(20.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Dê vida às suas ideias",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Designs profissionais, vídeos MP4 e IA no CANVA AO",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.88f)
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Button(
-                                onClick = onOpenCreateSheet,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = OrangeAccent,
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                                modifier = Modifier
-                                    .minimumInteractiveComponentSize()
-                                    .testTag("home_hero_create_button")
-                            ) {
-                                Text("Começar", fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Box(
+                    Text(
+                        text = "Dê vida às suas ideias",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Designs profissionais, vídeos MP4 e IA no CANVA AO",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.90f)
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Button(
+                        onClick = {
+                            sound?.playCreate()
+                            onOpenCreateSheet()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OrangeAccent,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.16f)),
-                        contentAlignment = Alignment.Center
+                            .minimumInteractiveComponentSize()
+                            .testTag("home_hero_create_button")
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.AutoAwesome,
-                            contentDescription = "Estúdio Criativo",
-                            tint = Color.White,
-                            modifier = Modifier.size(38.dp)
-                        )
+                        Text("Começar", fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
                     }
                 }
             }
         }
 
-        // 3. AI Studio Quick Access Card
+        // 3. AI Studio Quick Access Card (with CANVA AO app icon)
         item {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 18.dp)
                     .clip(RoundedCornerShape(18.dp))
-                    .clickable(onClick = onOpenAiStudio)
-                    .border(1.dp, CyanGlow.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+                    .clickable {
+                        sound?.playTap()
+                        onOpenAiStudio()
+                    }
+                    .border(1.dp, CyanGlow.copy(alpha = 0.42f), RoundedCornerShape(18.dp))
                     .testTag("home_ai_studio_card"),
                 color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(18.dp)
@@ -311,12 +327,13 @@ fun HomeScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(50.dp)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Brush.linearGradient(listOf(ElectricIndigo, CyanGlow))),
+                            .background(Brush.linearGradient(listOf(NavyPrimary, ElectricIndigo)))
+                            .border(1.dp, CyanGlow.copy(alpha = 0.55f), RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Filled.AutoAwesome, contentDescription = "AI Studio", tint = Color.White)
+                        CanvaAoLogoMark(size = 32.dp)
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -326,7 +343,7 @@ fun HomeScreen(
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 Text(
-                                    "Gemini IA",
+                                    "IA + Templates",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = CyanGlow,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -334,7 +351,7 @@ fun HomeScreen(
                             }
                         }
                         Text(
-                            text = "Gere cartazes editáveis, imagens e legendas em segundos.",
+                            text = "Crie templates editáveis com fotos reais, gere imagens e legendas em segundos.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2
@@ -366,7 +383,10 @@ fun HomeScreen(
                             modifier = Modifier
                                 .width(92.dp)
                                 .clip(RoundedCornerShape(16.dp))
-                                .clickable { onCategorySelected(cat.name) }
+                                .clickable {
+                                    sound?.playTap()
+                                    onCategorySelected(cat.name)
+                                }
                                 .testTag("home_category_${cat.name}"),
                             color = MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(16.dp),
@@ -410,22 +430,72 @@ fun HomeScreen(
                 SectionHeader(
                     title = "Templates em destaque",
                     actionLabel = "Ver tudo",
-                    onAction = onSeeAllTemplates
+                    onAction = {
+                        sound?.playTap()
+                        onSeeAllTemplates()
+                    }
                 )
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 18.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(filteredTemplates.take(10), key = { it.id }) { tpl ->
+                    items(filteredTemplates.take(12), key = { it.id }) { tpl ->
                         TemplateHorizontalCard(
                             template = tpl,
                             isFavorite = tpl.id in favoriteIds,
                             userAvatarUrl = userAvatarUrl,
                             userDisplayName = userDisplayName,
                             userHandle = userHandle,
-                            onClick = { onTemplateClick(tpl) },
-                            onToggleFavorite = { onToggleTemplateFavorite(tpl) }
+                            onClick = {
+                                sound?.playTap()
+                                onTemplateClick(tpl)
+                            },
+                            onToggleFavorite = {
+                                sound?.playTap()
+                                onToggleTemplateFavorite(tpl)
+                            }
                         )
+                    }
+                }
+            }
+        }
+
+        // 5b. Video Templates (1:1, 3:4, 4:5, 16:9, 9:16)
+        item {
+            val videoTemplates = remember(filteredTemplates) {
+                filteredTemplates.filter { it.templateType == "video" }
+            }
+            if (videoTemplates.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionHeader(
+                        title = "Templates de Vídeo • 1:1 a 9:16",
+                        actionLabel = "Ver tudo",
+                        onAction = {
+                            sound?.playTap()
+                            onSeeAllTemplates()
+                        }
+                    )
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 18.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(videoTemplates, key = { "vid_${it.id}" }) { tpl ->
+                            TemplateHorizontalCard(
+                                template = tpl,
+                                isFavorite = tpl.id in favoriteIds,
+                                userAvatarUrl = userAvatarUrl,
+                                userDisplayName = userDisplayName,
+                                userHandle = userHandle,
+                                onClick = {
+                                    sound?.playTap()
+                                    onTemplateClick(tpl)
+                                },
+                                onToggleFavorite = {
+                                    sound?.playTap()
+                                    onToggleTemplateFavorite(tpl)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -590,6 +660,7 @@ private fun TemplateHorizontalCard(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
+    val sound = LocalSoundEffects.current
     Surface(
         modifier = Modifier
             .width(156.dp)
@@ -617,24 +688,64 @@ private fun TemplateHorizontalCard(
                     userHandle = userHandle,
                     modifier = Modifier.fillMaxSize()
                 )
-                if (template.premium) {
-                    Surface(
-                        color = OrangeAccent,
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(8.dp)
-                    ) {
-                        Text(
-                            text = "PRO",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (template.premium) {
+                        Surface(
+                            color = OrangeAccent,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "PRO",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    if (template.templateType == "video") {
+                        Surface(
+                            color = ElectricIndigo.copy(alpha = 0.9f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
+                                Text(
+                                    text = "VÍDEO",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                            }
+                        }
                     }
                 }
+                Surface(
+                    color = Color.Black.copy(alpha = 0.65f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = template.effectiveAspectRatio(),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
                 IconButton(
-                    onClick = onToggleFavorite,
+                    onClick = {
+                        sound?.playTap()
+                        onToggleFavorite()
+                    },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .size(34.dp)
@@ -656,7 +767,7 @@ private fun TemplateHorizontalCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${template.category} • ${template.width}×${template.height}",
+                    text = "${template.category} • ${template.effectiveAspectRatio()}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1

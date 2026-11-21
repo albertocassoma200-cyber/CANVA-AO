@@ -62,18 +62,35 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.core.audio.LocalSoundEffects
 import com.example.core.model.DesignFormats
 import com.example.core.model.DesignLayer
 import com.example.core.model.ImageFilterKind
 import com.example.core.model.ImageMaskKind
 import com.example.core.model.LayerType
 import com.example.core.model.ShapeKind
+import com.example.core.model.TemplateSeedCatalog
 import com.example.ui.components.parseComposeColor
 import com.example.ui.theme.OrangeAccent
+
+private val StudioPhotoLibrary = listOf(
+    "Criador" to "res://img_tpl_social_creator",
+    "Estúdio TV" to "res://img_tpl_news_studio",
+    "Produto" to "res://img_tpl_ad_product",
+    "Cidade" to "res://img_tpl_business_city",
+    "Ideias" to "res://img_hero_ideas",
+    "Luanda" to "res://tpl_art_luanda",
+    "Moda" to "res://tpl_art_moda",
+    "Gastronomia" to "res://tpl_art_restaurante"
+)
 
 val EditorColorSwatches = listOf(
     "#FFFFFF", "#000000", "#0A1628", "#FF7A00", "#FF9500", "#1D9BF0",
@@ -109,6 +126,7 @@ fun TextToolsPanel(
     onAddText: () -> Unit,
     onUpdateLayer: (DesignLayer) -> Unit
 ) {
+    val sound = LocalSoundEffects.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -165,35 +183,50 @@ fun TextToolsPanel(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { onUpdateLayer(selectedLayer.copy(bold = !selectedLayer.bold)) }) {
+                IconButton(onClick = {
+                    sound?.playTap()
+                    onUpdateLayer(selectedLayer.copy(bold = !selectedLayer.bold))
+                }) {
                     Icon(
                         Icons.Filled.FormatBold,
                         contentDescription = "Negrito",
                         tint = if (selectedLayer.bold) OrangeAccent else MaterialTheme.colorScheme.onSurface
                     )
                 }
-                IconButton(onClick = { onUpdateLayer(selectedLayer.copy(italic = !selectedLayer.italic)) }) {
+                IconButton(onClick = {
+                    sound?.playTap()
+                    onUpdateLayer(selectedLayer.copy(italic = !selectedLayer.italic))
+                }) {
                     Icon(
                         Icons.Filled.FormatItalic,
                         contentDescription = "Itálico",
                         tint = if (selectedLayer.italic) OrangeAccent else MaterialTheme.colorScheme.onSurface
                     )
                 }
-                IconButton(onClick = { onUpdateLayer(selectedLayer.copy(textAlign = "left")) }) {
+                IconButton(onClick = {
+                    sound?.playTap()
+                    onUpdateLayer(selectedLayer.copy(textAlign = "left"))
+                }) {
                     Icon(
                         Icons.Filled.FormatAlignLeft,
                         contentDescription = "Esquerda",
                         tint = if (selectedLayer.textAlign == "left") OrangeAccent else MaterialTheme.colorScheme.onSurface
                     )
                 }
-                IconButton(onClick = { onUpdateLayer(selectedLayer.copy(textAlign = "center")) }) {
+                IconButton(onClick = {
+                    sound?.playTap()
+                    onUpdateLayer(selectedLayer.copy(textAlign = "center"))
+                }) {
                     Icon(
                         Icons.Filled.FormatAlignCenter,
                         contentDescription = "Centro",
                         tint = if (selectedLayer.textAlign == "center") OrangeAccent else MaterialTheme.colorScheme.onSurface
                     )
                 }
-                IconButton(onClick = { onUpdateLayer(selectedLayer.copy(textAlign = "right")) }) {
+                IconButton(onClick = {
+                    sound?.playTap()
+                    onUpdateLayer(selectedLayer.copy(textAlign = "right"))
+                }) {
                     Icon(
                         Icons.Filled.FormatAlignRight,
                         contentDescription = "Direita",
@@ -273,11 +306,13 @@ fun ImageToolsPanel(
     selectedLayer: DesignLayer?,
     aiBusy: Boolean,
     onImportPhoto: () -> Unit,
+    onPlaceStudioPhoto: (label: String, resUri: String) -> Unit,
     onReplacePhoto: (DesignLayer) -> Unit,
     onUseAsBackground: (DesignLayer) -> Unit,
     onRemoveBackgroundAi: (DesignLayer) -> Unit,
     onUpdateLayer: (DesignLayer) -> Unit
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -296,13 +331,40 @@ fun ImageToolsPanel(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                 modifier = Modifier.testTag("editor_import_photo_button")
             ) {
-                Text("+ Importar Foto")
+                Text("+ Galeria")
+            }
+        }
+
+        Text("Fotos de Estúdio (1 toque)", style = MaterialTheme.typography.labelLarge)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(StudioPhotoLibrary) { (label, resUri) ->
+                val resId = TemplateSeedCatalog.resolveDrawableResId(resUri)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onPlaceStudioPhoto(label, resUri) }
+                        .padding(2.dp)
+                ) {
+                    if (resId != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context).data(resId).crossfade(false).build(),
+                            contentDescription = label,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(54.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+                        )
+                    }
+                    Text(label, style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
 
         if (selectedLayer?.type != LayerType.IMAGE) {
             Text(
-                "Toque numa imagem do template ou importe uma foto para ajustar tamanho, filtros, máscaras ou remover o fundo com IA.",
+                "Toque numa foto acima para colocar no canvas ou selecione uma imagem para ajustar tamanho, filtros e máscara.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -528,6 +590,7 @@ fun LayersPanel(
     onGroupSelected: () -> Unit,
     onDeleteLayer: (String) -> Unit
 ) {
+    val sound = LocalSoundEffects.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -576,22 +639,40 @@ fun LayersPanel(
                                 Text("Grupo: ${layer.groupId.take(6)}", style = MaterialTheme.typography.labelSmall, color = OrangeAccent)
                             }
                         }
-                        IconButton(onClick = { if (actualIdx < layers.lastIndex) onMoveLayer(actualIdx, actualIdx + 1) }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = {
+                            sound?.playTap()
+                            if (actualIdx < layers.lastIndex) onMoveLayer(actualIdx, actualIdx + 1)
+                        }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Filled.ArrowUpward, contentDescription = "Subir", modifier = Modifier.size(16.dp))
                         }
-                        IconButton(onClick = { if (actualIdx > 0) onMoveLayer(actualIdx, actualIdx - 1) }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = {
+                            sound?.playTap()
+                            if (actualIdx > 0) onMoveLayer(actualIdx, actualIdx - 1)
+                        }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Filled.ArrowDownward, contentDescription = "Descer", modifier = Modifier.size(16.dp))
                         }
-                        IconButton(onClick = { onDuplicateLayer(layer) }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = {
+                            sound?.playTap()
+                            onDuplicateLayer(layer)
+                        }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Filled.ContentCopy, contentDescription = "Duplicar", modifier = Modifier.size(16.dp))
                         }
-                        IconButton(onClick = { onToggleLock(layer) }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = {
+                            sound?.playTap()
+                            onToggleLock(layer)
+                        }, modifier = Modifier.size(32.dp)) {
                             Icon(if (layer.locked) Icons.Filled.Lock else Icons.Filled.LockOpen, contentDescription = "Bloquear", modifier = Modifier.size(16.dp))
                         }
-                        IconButton(onClick = { onToggleVisible(layer) }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = {
+                            sound?.playTap()
+                            onToggleVisible(layer)
+                        }, modifier = Modifier.size(32.dp)) {
                             Icon(if (layer.visible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff, contentDescription = "Visibilidade", modifier = Modifier.size(16.dp))
                         }
-                        IconButton(onClick = { onDeleteLayer(layer.layerId) }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = {
+                            sound?.playTap()
+                            onDeleteLayer(layer.layerId)
+                        }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Filled.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                         }
                     }
@@ -610,9 +691,11 @@ fun BackgroundAndFormatPanel(
     hasBackgroundImage: Boolean,
     onChangeBackground: (String, String?) -> Unit,
     onPickBackgroundImage: () -> Unit,
+    onSelectStudioBackgroundImage: (String) -> Unit,
     onClearBackgroundImage: () -> Unit,
     onResizeCanvas: (String, Int, Int) -> Unit
 ) {
+    val context = LocalContext.current
     var customW by remember(currentWidth) { mutableStateOf(currentWidth.toString()) }
     var customH by remember(currentHeight) { mutableStateOf(currentHeight.toString()) }
 
@@ -639,6 +722,25 @@ fun BackgroundAndFormatPanel(
                         selected = false,
                         onClick = onClearBackgroundImage,
                         label = { Text("Remover Fundo") }
+                    )
+                }
+            }
+        }
+
+        Text("Fundos Fotográficos Prontos", style = MaterialTheme.typography.labelLarge)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(StudioPhotoLibrary) { (label, resUri) ->
+                val resId = TemplateSeedCatalog.resolveDrawableResId(resUri)
+                if (resId != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context).data(resId).crossfade(false).build(),
+                        contentDescription = label,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(width = 64.dp, height = 44.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+                            .clickable { onSelectStudioBackgroundImage(resUri) }
                     )
                 }
             }

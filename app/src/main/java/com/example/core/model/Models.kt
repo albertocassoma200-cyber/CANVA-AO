@@ -72,18 +72,35 @@ data class DesignTemplate(
     val name: String = "",
     val category: String = "",
     val previewStyle: String = "modern",
+    val templateType: String = "image", // "image" or "video"
+    val aspectRatio: String = "1:1",    // "1:1", "3:4", "4:5", "16:9", "9:16"
     val width: Long = 1080L,
     val height: Long = 1080L,
     val backgroundColorHex: String = "#0A1628",
     val backgroundGradientHex: String? = null,
     val layers: List<Map<String, Any>> = emptyList(),
+    val videoClips: List<Map<String, Any>> = emptyList(),
     val fontsUsed: List<String> = emptyList(),
     val colorsUsed: List<String> = emptyList(),
     val premium: Boolean = false,
     val published: Boolean = true,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
-)
+) {
+    fun effectiveAspectRatio(): String {
+        if (aspectRatio.isNotBlank() && aspectRatio != "1:1") return aspectRatio
+        val w = width.coerceAtLeast(1L)
+        val h = height.coerceAtLeast(1L)
+        return when {
+            w == h -> "1:1"
+            w * 4L == h * 3L -> "3:4"
+            w * 5L == h * 4L -> "4:5"
+            w > h -> "16:9"
+            w * 16L == h * 9L -> "9:16"
+            else -> aspectRatio.ifBlank { "1:1" }
+        }
+    }
+}
 
 @Keep
 @IgnoreExtraProperties
@@ -339,9 +356,15 @@ data class DesignLayer(
 
 enum class VideoTransitionKind(val label: String) {
     NONE("Nenhuma"),
-    FADE("Fade"),
+    FADE("Dissolver"),
     SLIDE("Deslizar"),
-    ZOOM("Zoom")
+    ZOOM("Zoom"),
+    FLASH("Flash"),
+    BLUR("Blur"),
+    ROTATE("Rotação"),
+    FLIP_3D("3D Flip"),
+    CINEMATIC("Cinematográfica"),
+    CUSTOM("Personalizada")
 }
 
 enum class VideoFilterKind(val label: String) {
@@ -349,7 +372,11 @@ enum class VideoFilterKind(val label: String) {
     CINEMA("Cinema"),
     WARM("Quente"),
     COOL("Frio"),
-    BW("P&B")
+    BW("P&B"),
+    VINTAGE("Vintage"),
+    VIVID("Vívido"),
+    NOIR("Noir"),
+    TEAL_ORANGE("Teal & Orange")
 }
 
 data class VideoClipItem(
@@ -365,28 +392,103 @@ data class VideoClipItem(
     val muted: Boolean = false,
     val filter: VideoFilterKind = VideoFilterKind.NORMAL,
     val transition: VideoTransitionKind = VideoTransitionKind.NONE,
-    val animation: String = "none"
+    val animation: String = "none",
+    // Transform & Crop
+    val zoomScale: Float = 1.0f,
+    val offsetX: Float = 0.0f,
+    val offsetY: Float = 0.0f,
+    val rotationDeg: Float = 0.0f,
+    val flipH: Boolean = false,
+    val flipV: Boolean = false,
+    val cropMode: String = "fill", // "fill", "fit", "1:1", "4:5", "16:9", "9:16"
+    // Playback & Transition & Speed Curve
+    val reversed: Boolean = false,
+    val frozenFromClipId: String? = null,
+    val transitionDurationMs: Long = 600L,
+    val speedCurve: String = "linear",
+    val animOut: String = "none",
+    val animCombo: String = "none",
+    val animDurationMs: Long = 500L,
+    // Pro Color Grading & HSL & Curves
+    val brightness: Float = 0.0f,    // -0.5..0.5
+    val contrast: Float = 1.0f,      // 0.5..2.0
+    val saturation: Float = 1.0f,    // 0.0..2.0
+    val exposure: Float = 0.0f,      // -0.5..0.5
+    val temperature: Float = 0.0f,   // -1.0..1.0
+    val sharpness: Float = 0.0f,     // 0.0..1.0
+    val vignette: Float = 0.0f,      // 0.0..1.0
+    val grain: Float = 0.0f,         // 0.0..1.0
+    val hueShift: Float = 0.0f,      // -180..180
+    val rgbGamma: Float = 1.0f,      // 0.5..1.8 (color curves)
+    // Pro FX & Mask & Chroma Key
+    val effectName: String = "NONE",
+    val effectIntensity: Float = 0.6f,
+    val maskShapeName: String = "NONE",
+    val chromaKeyEnabled: Boolean = false,
+    val chromaKeyColorHex: String = "#00FF00",
+    val chromaKeyTolerance: Float = 0.35f,
+    // Keyframes & Motion Tracking (serialized compact maps)
+    val keyframesData: List<Map<String, Any>> = emptyList(),
+    val motionTrackX: Float? = null,
+    val motionTrackY: Float? = null
 ) {
-    fun toMap(): Map<String, Any> = mapOf(
-        "clipId" to clipId,
-        "title" to title,
-        "uriString" to uriString,
-        "mediaType" to mediaType,
-        "durationMs" to durationMs,
-        "trimStartMs" to trimStartMs,
-        "trimEndMs" to trimEndMs,
-        "speed" to speed.toDouble(),
-        "volume" to volume.toDouble(),
-        "muted" to muted,
-        "filter" to filter.name,
-        "transition" to transition.name,
-        "animation" to animation
-    )
+    fun toMap(): Map<String, Any> = buildMap {
+        put("clipId", clipId)
+        put("title", title)
+        put("uriString", uriString)
+        put("mediaType", mediaType)
+        put("durationMs", durationMs)
+        put("trimStartMs", trimStartMs)
+        put("trimEndMs", trimEndMs)
+        put("speed", speed.toDouble())
+        put("volume", volume.toDouble())
+        put("muted", muted)
+        put("filter", filter.name)
+        put("transition", transition.name)
+        put("animation", animation)
+        put("zoomScale", zoomScale.toDouble())
+        put("offsetX", offsetX.toDouble())
+        put("offsetY", offsetY.toDouble())
+        put("rotationDeg", rotationDeg.toDouble())
+        put("flipH", flipH)
+        put("flipV", flipV)
+        put("cropMode", cropMode)
+        put("reversed", reversed)
+        frozenFromClipId?.let { put("frozenFromClipId", it) }
+        put("transitionDurationMs", transitionDurationMs)
+        put("speedCurve", speedCurve)
+        put("animOut", animOut)
+        put("animCombo", animCombo)
+        put("animDurationMs", animDurationMs)
+        put("brightness", brightness.toDouble())
+        put("contrast", contrast.toDouble())
+        put("saturation", saturation.toDouble())
+        put("exposure", exposure.toDouble())
+        put("temperature", temperature.toDouble())
+        put("sharpness", sharpness.toDouble())
+        put("vignette", vignette.toDouble())
+        put("grain", grain.toDouble())
+        put("hueShift", hueShift.toDouble())
+        put("rgbGamma", rgbGamma.toDouble())
+        put("effectName", effectName)
+        put("effectIntensity", effectIntensity.toDouble())
+        put("maskShapeName", maskShapeName)
+        put("chromaKeyEnabled", chromaKeyEnabled)
+        put("chromaKeyColorHex", chromaKeyColorHex)
+        put("chromaKeyTolerance", chromaKeyTolerance.toDouble())
+        if (keyframesData.isNotEmpty()) put("keyframesData", keyframesData)
+        motionTrackX?.let { put("motionTrackX", it.toDouble()) }
+        motionTrackY?.let { put("motionTrackY", it.toDouble()) }
+    }
 
     companion object {
+        @Suppress("UNCHECKED_CAST")
         fun fromMap(map: Map<String, Any?>): VideoClipItem {
             val filterStr = map["filter"] as? String ?: VideoFilterKind.NORMAL.name
             val transStr = map["transition"] as? String ?: VideoTransitionKind.NONE.name
+            val kfRaw = (map["keyframesData"] as? List<*>)
+                ?.mapNotNull { it as? Map<String, Any> }
+                ?: emptyList()
             return VideoClipItem(
                 clipId = map["clipId"] as? String ?: java.util.UUID.randomUUID().toString(),
                 title = map["title"] as? String ?: "Clipe",
@@ -400,7 +502,40 @@ data class VideoClipItem(
                 muted = map["muted"] as? Boolean ?: false,
                 filter = enumValues<VideoFilterKind>().firstOrNull { it.name == filterStr } ?: VideoFilterKind.NORMAL,
                 transition = enumValues<VideoTransitionKind>().firstOrNull { it.name == transStr } ?: VideoTransitionKind.NONE,
-                animation = map["animation"] as? String ?: "none"
+                animation = map["animation"] as? String ?: "none",
+                zoomScale = (map["zoomScale"] as? Number)?.toFloat() ?: 1.0f,
+                offsetX = (map["offsetX"] as? Number)?.toFloat() ?: 0.0f,
+                offsetY = (map["offsetY"] as? Number)?.toFloat() ?: 0.0f,
+                rotationDeg = (map["rotationDeg"] as? Number)?.toFloat() ?: 0.0f,
+                flipH = map["flipH"] as? Boolean ?: false,
+                flipV = map["flipV"] as? Boolean ?: false,
+                cropMode = map["cropMode"] as? String ?: "fill",
+                reversed = map["reversed"] as? Boolean ?: false,
+                frozenFromClipId = map["frozenFromClipId"] as? String,
+                transitionDurationMs = (map["transitionDurationMs"] as? Number)?.toLong() ?: 600L,
+                speedCurve = map["speedCurve"] as? String ?: "linear",
+                animOut = map["animOut"] as? String ?: "none",
+                animCombo = map["animCombo"] as? String ?: "none",
+                animDurationMs = (map["animDurationMs"] as? Number)?.toLong() ?: 500L,
+                brightness = (map["brightness"] as? Number)?.toFloat() ?: 0.0f,
+                contrast = (map["contrast"] as? Number)?.toFloat() ?: 1.0f,
+                saturation = (map["saturation"] as? Number)?.toFloat() ?: 1.0f,
+                exposure = (map["exposure"] as? Number)?.toFloat() ?: 0.0f,
+                temperature = (map["temperature"] as? Number)?.toFloat() ?: 0.0f,
+                sharpness = (map["sharpness"] as? Number)?.toFloat() ?: 0.0f,
+                vignette = (map["vignette"] as? Number)?.toFloat() ?: 0.0f,
+                grain = (map["grain"] as? Number)?.toFloat() ?: 0.0f,
+                hueShift = (map["hueShift"] as? Number)?.toFloat() ?: 0.0f,
+                rgbGamma = (map["rgbGamma"] as? Number)?.toFloat() ?: 1.0f,
+                effectName = map["effectName"] as? String ?: "NONE",
+                effectIntensity = (map["effectIntensity"] as? Number)?.toFloat() ?: 0.6f,
+                maskShapeName = map["maskShapeName"] as? String ?: "NONE",
+                chromaKeyEnabled = map["chromaKeyEnabled"] as? Boolean ?: false,
+                chromaKeyColorHex = map["chromaKeyColorHex"] as? String ?: "#00FF00",
+                chromaKeyTolerance = (map["chromaKeyTolerance"] as? Number)?.toFloat() ?: 0.35f,
+                keyframesData = kfRaw,
+                motionTrackX = (map["motionTrackX"] as? Number)?.toFloat(),
+                motionTrackY = (map["motionTrackY"] as? Number)?.toFloat()
             )
         }
     }
@@ -428,9 +563,11 @@ data class DesignFormat(
 
 object DesignFormats {
     val presets = listOf(
-        DesignFormat("ig_square", "Instagram Quadrado", 1080, 1080, "Instagram"),
-        DesignFormat("ig_vertical", "Instagram Vertical", 1080, 1350, "Instagram"),
-        DesignFormat("stories_reels", "Stories e Reels", 1080, 1920, "Instagram"),
+        DesignFormat("ig_square", "Quadrado 1:1", 1080, 1080, "Instagram"),
+        DesignFormat("portrait_3_4", "Retrato 3:4", 1080, 1440, "Instagram"),
+        DesignFormat("ig_vertical", "Feed Vertical 4:5", 1080, 1350, "Instagram"),
+        DesignFormat("widescreen_16_9", "Panorâmico 16:9", 1920, 1080, "YouTube"),
+        DesignFormat("stories_reels", "Vertical 9:16", 1080, 1920, "Instagram"),
         DesignFormat("fb_horizontal", "Facebook Horizontal", 1200, 630, "Facebook"),
         DesignFormat("yt_thumb", "Miniatura YouTube", 1280, 720, "YouTube"),
         DesignFormat("tiktok_vert", "Vertical do TikTok", 1080, 1920, "TikTok"),

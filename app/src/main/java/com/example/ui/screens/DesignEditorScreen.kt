@@ -10,11 +10,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,15 +41,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TextFields
@@ -94,7 +103,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -103,6 +111,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.core.audio.LocalSoundEffects
 import com.example.core.model.DesignLayer
 import com.example.core.model.DesignProject
 import com.example.core.model.ImageFilterKind
@@ -153,6 +162,7 @@ fun DesignEditorScreen(
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val sound = LocalSoundEffects.current
     val aiRepository = remember { AiStudioRepository() }
 
     var project by remember(initialProject.id, initialProject.title) { mutableStateOf(initialProject) }
@@ -190,8 +200,47 @@ fun DesignEditorScreen(
     var isExporting by remember { mutableStateOf(false) }
     var exportedResult by remember { mutableStateOf<ExportedFileResult?>(null) }
     var showRenameDialog by remember { mutableStateOf(false) }
+    var editingTextLayer by remember { mutableStateOf<DesignLayer?>(null) }
     var aiBusy by remember { mutableStateOf(false) }
     var replacingLayerId by remember { mutableStateOf<String?>(null) }
+
+    fun addQuickTextLayer() {
+        sound?.playCreate()
+        val newTxt = DesignLayer(
+            layerId = "txt_${UUID.randomUUID().toString().take(8)}",
+            type = LayerType.TEXT,
+            name = "Texto ${layers.size + 1}",
+            xFraction = 0.5f,
+            yFraction = 0.5f,
+            widthFraction = 0.72f,
+            heightFraction = 0.16f,
+            text = "NOVO TEXTO",
+            fontFamilyKey = "plus_jakarta_sans",
+            fontSizeSp = 28f,
+            colorHex = "#FFFFFF",
+            bold = true
+        )
+        commitLayers(layers + newTxt)
+        selectedIds = setOf(newTxt.layerId)
+        activeTab = EditorTab.TEXT
+        toolsExpanded = true
+    }
+
+    fun applyBackgroundImageUri(uriString: String) {
+        sound?.playTap()
+        val bgLayer = DesignLayer(
+            layerId = "bg_image_layer",
+            type = LayerType.IMAGE,
+            name = "Imagem de Fundo",
+            xFraction = 0.5f,
+            yFraction = 0.5f,
+            widthFraction = 1.0f,
+            heightFraction = 1.0f,
+            imageUri = uriString
+        )
+        val withoutOldBg = layers.filterNot { it.layerId == "bg_image_layer" }
+        commitLayers(listOf(bgLayer) + withoutOldBg)
+    }
 
     // Select first editable text/top layer initially for convenience
     LaunchedEffect(initialProject) {
@@ -258,23 +307,13 @@ fun DesignEditorScreen(
                 )
             } catch (_: Exception) {
             }
-            val bgLayer = DesignLayer(
-                layerId = "bg_image_layer",
-                type = LayerType.IMAGE,
-                name = "Imagem de Fundo",
-                xFraction = 0.5f,
-                yFraction = 0.5f,
-                widthFraction = 1.0f,
-                heightFraction = 1.0f,
-                imageUri = uri.toString()
-            )
-            val withoutOldBg = layers.filterNot { it.layerId == "bg_image_layer" }
-            commitLayers(listOf(bgLayer) + withoutOldBg)
+            applyBackgroundImageUri(uri.toString())
             onShowMessage("Imagem de fundo aplicada!")
         }
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 4.dp) {
                 Row(
@@ -283,7 +322,13 @@ fun DesignEditorScreen(
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onBack, modifier = Modifier.minimumInteractiveComponentSize()) {
+                    IconButton(
+                        onClick = {
+                            sound?.playTap()
+                            onBack()
+                        },
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
                     Column(
@@ -305,6 +350,7 @@ fun DesignEditorScreen(
                     IconButton(
                         onClick = {
                             if (undoStack.isNotEmpty()) {
+                                sound?.playTap()
                                 val prev = undoStack.removeAt(undoStack.lastIndex)
                                 redoStack.add(layers)
                                 layers = prev
@@ -318,6 +364,7 @@ fun DesignEditorScreen(
                     IconButton(
                         onClick = {
                             if (redoStack.isNotEmpty()) {
+                                sound?.playTap()
                                 val next = redoStack.removeAt(redoStack.lastIndex)
                                 undoStack.add(layers)
                                 layers = next
@@ -328,7 +375,10 @@ fun DesignEditorScreen(
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Refazer")
                     }
-                    IconButton(onClick = { showGrid = !showGrid }) {
+                    IconButton(onClick = {
+                        sound?.playTap()
+                        showGrid = !showGrid
+                    }) {
                         Icon(
                             Icons.Filled.GridOn,
                             contentDescription = "Grelha",
@@ -336,13 +386,19 @@ fun DesignEditorScreen(
                         )
                     }
                     IconButton(
-                        onClick = { onSaveToCloud(project) },
+                        onClick = {
+                            sound?.playSuccess()
+                            onSaveToCloud(project)
+                        },
                         modifier = Modifier.testTag("editor_save_cloud_button")
                     ) {
                         Icon(Icons.Filled.CloudUpload, contentDescription = "Guardar na nuvem")
                     }
                     Button(
-                        onClick = { showExportDialog = true },
+                        onClick = {
+                            sound?.playTap()
+                            showExportDialog = true
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent, contentColor = Color.White),
                         shape = RoundedCornerShape(12.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
@@ -401,24 +457,7 @@ fun DesignEditorScreen(
                             when (activeTab) {
                                 EditorTab.TEXT -> TextToolsPanel(
                                     selectedLayer = primarySelected,
-                                    onAddText = {
-                                        val newTxt = DesignLayer(
-                                            layerId = "txt_${UUID.randomUUID().toString().take(8)}",
-                                            type = LayerType.TEXT,
-                                            name = "Texto ${layers.size + 1}",
-                                            xFraction = 0.5f,
-                                            yFraction = 0.5f,
-                                            widthFraction = 0.72f,
-                                            heightFraction = 0.16f,
-                                            text = "NOVO TEXTO",
-                                            fontFamilyKey = "plus_jakarta_sans",
-                                            fontSizeSp = 28f,
-                                            colorHex = "#FFFFFF",
-                                            bold = true
-                                        )
-                                        commitLayers(layers + newTxt)
-                                        selectedIds = setOf(newTxt.layerId)
-                                    },
+                                    onAddText = { addQuickTextLayer() },
                                     onUpdateLayer = { updated ->
                                         commitLayers(layers.map { if (it.layerId == updated.layerId) updated else it }, recordUndo = false)
                                     }
@@ -428,6 +467,22 @@ fun DesignEditorScreen(
                                     aiBusy = aiBusy,
                                     onImportPhoto = {
                                         photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                    },
+                                    onPlaceStudioPhoto = { label, resUri ->
+                                        sound?.playCreate()
+                                        val newLayer = DesignLayer(
+                                            layerId = "img_${UUID.randomUUID().toString().take(8)}",
+                                            type = LayerType.IMAGE,
+                                            name = label,
+                                            xFraction = 0.5f,
+                                            yFraction = 0.5f,
+                                            widthFraction = 0.62f,
+                                            heightFraction = 0.48f,
+                                            imageUri = resUri
+                                        )
+                                        commitLayers(layers + newLayer)
+                                        selectedIds = setOf(newLayer.layerId)
+                                        onShowMessage("Imagem \"$label\" adicionada ao canvas!")
                                     },
                                     onReplacePhoto = { imgLayer ->
                                         replacingLayerId = imgLayer.layerId
@@ -585,6 +640,10 @@ fun DesignEditorScreen(
                                     onPickBackgroundImage = {
                                         bgImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                                     },
+                                    onSelectStudioBackgroundImage = { resUri ->
+                                        applyBackgroundImageUri(resUri)
+                                        onShowMessage("Fundo fotográfico aplicado!")
+                                    },
                                     onClearBackgroundImage = {
                                         commitLayers(layers.filterNot {
                                             it.layerId == "bg_image_layer" ||
@@ -642,12 +701,17 @@ fun DesignEditorScreen(
             }
         }
     ) { innerPadding ->
-        // Workspace Canvas Area with Zoom & Pan + Alignment Guides
+        // Workspace Canvas Area with Zoom & Pan + Alignment Guides + Quick Selection Toolbar
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(NavyDeep)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { selectedIds = emptySet() }
+                    )
+                }
                 .pointerInput(Unit) {
                     detectTransformGestures { _, pan, zoom, _ ->
                         canvasZoom = (canvasZoom * zoom).coerceIn(0.6f, 2.5f)
@@ -663,7 +727,7 @@ fun DesignEditorScreen(
 
             BoxWithConstraints(
                 modifier = Modifier
-                    .padding(14.dp)
+                    .padding(horizontal = 16.dp, vertical = 48.dp)
                     .aspectRatio(aspect)
                     .graphicsLayer(
                         scaleX = canvasZoom,
@@ -676,7 +740,7 @@ fun DesignEditorScreen(
                         if (!isTransparentBg) Modifier.background(Brush.verticalGradient(listOf(bgStart, bgEnd)))
                         else Modifier
                     )
-                    .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
             ) {
                 val canvasW = maxWidth
                 val canvasH = maxHeight
@@ -719,13 +783,26 @@ fun DesignEditorScreen(
                                 if (isSelected) Modifier.border(2.dp, OrangeAccent, RoundedCornerShape(6.dp))
                                 else Modifier
                             )
-                            .clickable {
-                                selectedIds = setOf(layer.layerId)
-                                when (layer.type) {
-                                    LayerType.TEXT -> activeTab = EditorTab.TEXT
-                                    LayerType.IMAGE -> activeTab = EditorTab.IMAGE
-                                    LayerType.SHAPE, LayerType.STICKER, LayerType.LINE -> activeTab = EditorTab.ELEMENTS
-                                }
+                            .pointerInput(layer.layerId, layer.type) {
+                                detectTapGestures(
+                                    onTap = {
+                                        selectedIds = setOf(layer.layerId)
+                                        when (layer.type) {
+                                            LayerType.TEXT -> activeTab = EditorTab.TEXT
+                                            LayerType.IMAGE -> activeTab = EditorTab.IMAGE
+                                            LayerType.SHAPE, LayerType.STICKER, LayerType.LINE -> activeTab = EditorTab.ELEMENTS
+                                        }
+                                    },
+                                    onDoubleTap = {
+                                        selectedIds = setOf(layer.layerId)
+                                        if (layer.type == LayerType.TEXT) {
+                                            editingTextLayer = layer
+                                        } else if (layer.type == LayerType.IMAGE) {
+                                            activeTab = EditorTab.IMAGE
+                                            toolsExpanded = true
+                                        }
+                                    }
+                                )
                             }
                             .pointerInput(layer.layerId, layer.locked) {
                                 if (!layer.locked) {
@@ -796,27 +873,45 @@ fun DesignEditorScreen(
                             }
                             LayerType.TEXT -> {
                                 val fontSp = (layer.fontSizeSp * scale * 0.72f).coerceIn(9f, 52f).sp
-                                Text(
-                                    text = layer.text,
-                                    color = parseComposeColor(layer.colorHex, Color.White).copy(alpha = layer.opacity.coerceIn(0f, 1f)),
-                                    fontFamily = editorFontFamily(layer.fontFamilyKey),
-                                    fontSize = fontSp,
-                                    lineHeight = fontSp * 1.1f,
-                                    fontWeight = if (layer.bold) FontWeight.ExtraBold else FontWeight.Normal,
-                                    fontStyle = if (layer.italic) FontStyle.Italic else FontStyle.Normal,
-                                    letterSpacing = layer.letterSpacing.sp,
-                                    style = if (layer.shadowEnabled) {
-                                        TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.65f), offset = Offset(2f, 3f), blurRadius = 6f))
-                                    } else {
-                                        TextStyle.Default
-                                    },
-                                    textAlign = when (layer.textAlign) {
-                                        "left" -> TextAlign.Start
-                                        "right" -> TextAlign.End
-                                        else -> TextAlign.Center
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                val textAlignVal = when (layer.textAlign) {
+                                    "left" -> TextAlign.Start
+                                    "right" -> TextAlign.End
+                                    else -> TextAlign.Center
+                                }
+                                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                    if (layer.outlineEnabled) {
+                                        Text(
+                                            text = layer.text,
+                                            color = parseComposeColor(layer.outlineColorHex, Color.Black).copy(alpha = layer.opacity.coerceIn(0f, 1f)),
+                                            fontFamily = editorFontFamily(layer.fontFamilyKey),
+                                            fontSize = fontSp,
+                                            lineHeight = fontSp * 1.1f,
+                                            fontWeight = if (layer.bold) FontWeight.ExtraBold else FontWeight.Normal,
+                                            fontStyle = if (layer.italic) FontStyle.Italic else FontStyle.Normal,
+                                            letterSpacing = layer.letterSpacing.sp,
+                                            style = TextStyle(drawStyle = Stroke(width = 4.5f)),
+                                            textAlign = textAlignVal,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                    Text(
+                                        text = layer.text,
+                                        color = parseComposeColor(layer.colorHex, Color.White).copy(alpha = layer.opacity.coerceIn(0f, 1f)),
+                                        fontFamily = editorFontFamily(layer.fontFamilyKey),
+                                        fontSize = fontSp,
+                                        lineHeight = fontSp * 1.1f,
+                                        fontWeight = if (layer.bold) FontWeight.ExtraBold else FontWeight.Normal,
+                                        fontStyle = if (layer.italic) FontStyle.Italic else FontStyle.Normal,
+                                        letterSpacing = layer.letterSpacing.sp,
+                                        style = if (layer.shadowEnabled) {
+                                            TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.65f), offset = Offset(2f, 3f), blurRadius = 6f))
+                                        } else {
+                                            TextStyle.Default
+                                        },
+                                        textAlign = textAlignVal,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
                             LayerType.IMAGE -> {
                                 val maskShape = when (layer.maskKind) {
@@ -826,22 +921,16 @@ fun DesignEditorScreen(
                                 }
                                 val cm = buildComposeImageColorMatrix(layer)
                                 val resId = TemplateSeedCatalog.resolveDrawableResId(layer.imageUri)
-                                if (resId != null) {
-                                    Image(
-                                        painter = painterResource(id = resId),
-                                        contentDescription = layer.name,
-                                        contentScale = ContentScale.Crop,
-                                        colorFilter = ColorFilter.colorMatrix(cm),
-                                        alpha = layer.opacity.coerceIn(0f, 1f),
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .clip(maskShape)
-                                    )
-                                } else if (!layer.imageUri.isNullOrBlank()) {
+                                val imageData: Any? = when {
+                                    resId != null -> resId
+                                    !layer.imageUri.isNullOrBlank() -> Uri.parse(layer.imageUri)
+                                    else -> null
+                                }
+                                if (imageData != null) {
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
-                                            .data(Uri.parse(layer.imageUri))
-                                            .crossfade(true)
+                                            .data(imageData)
+                                            .crossfade(false)
                                             .build(),
                                         contentDescription = layer.name,
                                         contentScale = ContentScale.Crop,
@@ -864,6 +953,59 @@ fun DesignEditorScreen(
                                 }
                             }
                         }
+                        if (isSelected && !layer.locked) {
+                            // Interactive bottom-right corner resize handle
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("canvas_layer_resize_handle")
+                                    .pointerInput(layer.layerId) {
+                                        var resizeStartSnapshot: List<DesignLayer>? = null
+                                        detectDragGestures(
+                                            onDragStart = { resizeStartSnapshot = layers },
+                                            onDragEnd = {
+                                                val snap = resizeStartSnapshot
+                                                if (snap != null && snap != layers) {
+                                                    undoStack.add(snap)
+                                                    if (undoStack.size > 30) undoStack.removeAt(0)
+                                                    redoStack.clear()
+                                                }
+                                                resizeStartSnapshot = null
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                val cur = layers.firstOrNull { it.layerId == layer.layerId } ?: return@detectDragGestures
+                                                val dw = (dragAmount.x * 2f) / canvasW.toPx().coerceAtLeast(1f)
+                                                val dh = (dragAmount.y * 2f) / canvasH.toPx().coerceAtLeast(1f)
+                                                val nw = (cur.widthFraction + dw).coerceIn(0.08f, 1.0f)
+                                                val nh = (cur.heightFraction + dh).coerceIn(0.05f, 1.0f)
+                                                layers = layers.map {
+                                                    if (it.layerId == cur.layerId) it.copy(widthFraction = nw, heightFraction = nh) else it
+                                                }
+                                                project = project.copy(layers = layers.map { it.toMap() })
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape)
+                                        .background(OrangeAccent)
+                                        .border(1.5.dp, Color.White, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Filled.OpenWith,
+                                        contentDescription = "Redimensionar camada",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -882,6 +1024,142 @@ fun DesignEditorScreen(
                         }
                         if (snapCenterY) {
                             drawLine(CyanGlow, Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), strokeWidth = 2.5f)
+                        }
+                    }
+                }
+            }
+
+            // Floating Quick-Place Strip at top of workspace for 1-tap element placement
+            Surface(
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                shape = RoundedCornerShape(24.dp),
+                tonalElevation = 4.dp,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = { addQuickTextLayer() },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        modifier = Modifier.testTag("canvas_quick_add_text")
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(15.dp), tint = OrangeAccent)
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("Texto", style = MaterialTheme.typography.labelMedium)
+                    }
+                    TextButton(
+                        onClick = {
+                            sound?.playTap()
+                            activeTab = EditorTab.IMAGE
+                            toolsExpanded = true
+                        },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        modifier = Modifier.testTag("canvas_quick_add_image")
+                    ) {
+                        Icon(Icons.Filled.Image, contentDescription = null, modifier = Modifier.size(15.dp), tint = CyanGlow)
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("Imagem", style = MaterialTheme.typography.labelMedium)
+                    }
+                    TextButton(
+                        onClick = {
+                            sound?.playTap()
+                            activeTab = EditorTab.BACKGROUND
+                            toolsExpanded = true
+                        },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        modifier = Modifier.testTag("canvas_quick_background")
+                    ) {
+                        Icon(Icons.Filled.Palette, contentDescription = null, modifier = Modifier.size(15.dp), tint = OrangeAccent)
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("Fundo", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
+            // Floating Selection Quick-Action Bar at bottom of workspace when a layer is selected
+            primarySelected?.let { sel ->
+                Surface(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    shape = RoundedCornerShape(22.dp),
+                    tonalElevation = 6.dp,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        if (sel.type == LayerType.TEXT) {
+                            IconButton(
+                                onClick = {
+                                    sound?.playTap()
+                                    editingTextLayer = sel
+                                },
+                                modifier = Modifier.minimumInteractiveComponentSize()
+                            ) {
+                                Icon(Icons.Filled.Edit, contentDescription = "Editar texto", tint = OrangeAccent)
+                            }
+                        }
+                        IconButton(
+                            onClick = {
+                                sound?.playTap()
+                                val copy = sel.copy(
+                                    layerId = "dup_${UUID.randomUUID().toString().take(8)}",
+                                    name = "${sel.name} (Cópia)",
+                                    xFraction = (sel.xFraction + 0.05f).coerceAtMost(0.92f),
+                                    yFraction = (sel.yFraction + 0.05f).coerceAtMost(0.92f)
+                                )
+                                commitLayers(layers + copy)
+                                selectedIds = setOf(copy.layerId)
+                            },
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                        ) {
+                            Icon(Icons.Filled.ContentCopy, contentDescription = "Duplicar")
+                        }
+                        IconButton(
+                            onClick = {
+                                sound?.playTap()
+                                val idx = layers.indexOfFirst { it.layerId == sel.layerId }
+                                if (idx in 0 until layers.lastIndex) {
+                                    val mutable = layers.toMutableList()
+                                    val item = mutable.removeAt(idx)
+                                    mutable.add(idx + 1, item)
+                                    commitLayers(mutable)
+                                }
+                            },
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                        ) {
+                            Icon(Icons.Filled.ArrowUpward, contentDescription = "Trazer para frente")
+                        }
+                        IconButton(
+                            onClick = {
+                                sound?.playTap()
+                                commitLayers(layers.map { if (it.layerId == sel.layerId) it.copy(locked = !it.locked) else it })
+                            },
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                        ) {
+                            Icon(
+                                if (sel.locked) Icons.Filled.Lock else Icons.Filled.LockOpen,
+                                contentDescription = if (sel.locked) "Desbloquear" else "Bloquear",
+                                tint = if (sel.locked) OrangeAccent else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                sound?.playTap()
+                                commitLayers(layers.filterNot { it.layerId == sel.layerId })
+                                selectedIds = selectedIds - sel.layerId
+                            },
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                        ) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Eliminar camada", tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -909,6 +1187,37 @@ fun DesignEditorScreen(
                 }
             }
         }
+    }
+
+    editingTextLayer?.let { target ->
+        var textDraft by remember(target.layerId) { mutableStateOf(target.text) }
+        AlertDialog(
+            onDismissRequest = { editingTextLayer = null },
+            title = { Text("Editar Texto no Canvas") },
+            text = {
+                OutlinedTextField(
+                    value = textDraft,
+                    onValueChange = { textDraft = it },
+                    label = { Text("Texto") },
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        commitLayers(layers.map {
+                            if (it.layerId == target.layerId) it.copy(text = textDraft) else it
+                        })
+                        editingTextLayer = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent, contentColor = Color.White)
+                ) { Text("Aplicar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingTextLayer = null }) { Text("Cancelar") }
+            }
+        )
     }
 
     if (showRenameDialog) {
@@ -973,6 +1282,7 @@ fun DesignEditorScreen(
                             renderResult.fold(
                                 onSuccess = { fileRes ->
                                     onCompleteExport(exportId, 2L, typeKey, fileRes.fileSizeBytes)
+                                    sound?.playSuccess()
                                     isExporting = false
                                     showExportDialog = false
                                     exportedResult = fileRes

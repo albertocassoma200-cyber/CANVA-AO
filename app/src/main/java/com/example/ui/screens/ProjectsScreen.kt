@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.core.audio.LocalSoundEffects
 import com.example.core.model.DesignProject
 import com.example.core.model.UiState
 import com.example.ui.components.DesignCanvasThumbnail
@@ -75,6 +76,7 @@ fun ProjectsScreen(
     onToggleFavorite: (DesignProject) -> Unit,
     onDeleteProject: (String) -> Unit
 ) {
+    val sound = LocalSoundEffects.current
     var searchQuery by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf("Todos") }
     var renamingProject by remember { mutableStateOf<DesignProject?>(null) }
@@ -113,7 +115,10 @@ fun ProjectsScreen(
             ) {
                 Text("Meus Projetos", style = MaterialTheme.typography.headlineMedium)
                 Button(
-                    onClick = onCreateNew,
+                    onClick = {
+                        sound?.playCreate()
+                        onCreateNew()
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent, contentColor = Color.White),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.testTag("projects_new_button")
@@ -144,7 +149,10 @@ fun ProjectsScreen(
                 items(listOf("Todos", "Designs", "Vídeos", "Favoritos")) { chip ->
                     FilterChip(
                         selected = filter == chip,
-                        onClick = { filter = chip },
+                        onClick = {
+                            sound?.playTap()
+                            filter = chip
+                        },
                         label = { Text(chip) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = OrangeAccent,
@@ -238,7 +246,10 @@ fun ProjectsScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            IconButton(onClick = { onToggleFavorite(project) }) {
+                            IconButton(onClick = {
+                                sound?.playTap()
+                                onToggleFavorite(project)
+                            }) {
                                 Icon(
                                     imageVector = if (project.favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                                     contentDescription = "Favorito",
@@ -246,7 +257,10 @@ fun ProjectsScreen(
                                 )
                             }
                             Box {
-                                IconButton(onClick = { menuOpen = true }) {
+                                IconButton(onClick = {
+                                    sound?.playTap()
+                                    menuOpen = true
+                                }) {
                                     Icon(Icons.Filled.MoreVert, contentDescription = "Opções")
                                 }
                                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {

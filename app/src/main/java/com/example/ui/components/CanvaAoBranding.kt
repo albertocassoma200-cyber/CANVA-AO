@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -413,7 +414,10 @@ fun DesignCanvasThumbnail(
     userDisplayName: String? = null,
     userHandle: String? = null
 ) {
-    val authUser = remember { Firebase.auth.currentUser }
+    val needsAuthFallback = userAvatarUrl.isNullOrBlank() || userDisplayName.isNullOrBlank() || userHandle.isNullOrBlank()
+    val authUser = remember(needsAuthFallback) {
+        if (needsAuthFallback) Firebase.auth.currentUser else null
+    }
     val resolvedAvatar = userAvatarUrl?.takeIf { it.isNotBlank() }
         ?: authUser?.photoUrl?.toString()?.takeIf { it.isNotBlank() }
         ?: "res://ic_default_avatar"
@@ -427,6 +431,7 @@ fun DesignCanvasThumbnail(
             "@" + clean.ifBlank { "criador" }
         }
 
+    val context = LocalContext.current
     val isTransparent = backgroundColorHex.equals("transparent", ignoreCase = true)
     val bgStart = if (isTransparent) Color(0xFF1E293B) else parseComposeColor(backgroundColorHex, NavyPrimary)
     val bgEnd = if (isTransparent) Color(0xFF334155) else (backgroundGradientHex?.let { parseComposeColor(it, bgStart) } ?: bgStart)
@@ -471,19 +476,20 @@ fun DesignCanvasThumbnail(
                             ImageMaskKind.NONE -> RectangleShape
                         }
                         val resId = TemplateSeedCatalog.resolveDrawableResId(layer.imageUri)
-                        if (resId != null) {
-                            androidx.compose.foundation.Image(
-                                painter = androidx.compose.ui.res.painterResource(id = resId),
-                                contentDescription = layer.name,
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                alpha = layer.opacity.coerceIn(0f, 1f),
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(maskShape)
-                            )
-                        } else if (!layer.imageUri.isNullOrBlank()) {
+                        val imageData: Any? = when {
+                            resId != null -> resId
+                            !layer.imageUri.isNullOrBlank() -> android.net.Uri.parse(layer.imageUri)
+                            else -> null
+                        }
+                        if (imageData != null) {
+                            val request = remember(imageData, context) {
+                                coil.request.ImageRequest.Builder(context)
+                                    .data(imageData)
+                                    .crossfade(false)
+                                    .build()
+                            }
                             coil.compose.AsyncImage(
-                                model = android.net.Uri.parse(layer.imageUri),
+                                model = request,
                                 contentDescription = layer.name,
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                 alpha = layer.opacity.coerceIn(0f, 1f),

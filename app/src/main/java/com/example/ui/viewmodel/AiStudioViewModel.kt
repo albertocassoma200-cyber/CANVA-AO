@@ -29,7 +29,7 @@ class AiStudioViewModel(
             AiChatMessage(
                 id = "welcome",
                 fromUser = false,
-                text = "Olá! Sou o AI Studio do CANVA AO. Posso criar um design editável para si (ex: \"Cria um cartaz profissional para uma loja de roupas\"), gerar imagens, escrever legendas ou sugerir paletas de cores e fontes."
+                text = "Olá! Sou a IA oficial do CANVA AO. Posso criar templates completos com fotografia real prontos para guardar na sua biblioteca, abrir cartazes editáveis no editor, gerar imagens exclusivas e escrever legendas."
             )
         )
     )
@@ -47,6 +47,16 @@ class AiStudioViewModel(
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
+    private fun isDesignOrTemplatePrompt(text: String): Boolean {
+        val lower = text.lowercase()
+        val keywords = listOf(
+            "template", "modelo", "cria", "criar", "faz", "gera",
+            "cartaz", "flyer", "post", "banner", "capa", "story",
+            "anúncio", "anuncio", "publicidade", "notícia", "noticia", "design"
+        )
+        return keywords.any { lower.contains(it) }
+    }
+
     fun sendChatPrompt(prompt: String, buildDesignAlso: Boolean = false) {
         val clean = prompt.trim()
         if (clean.isBlank() || _chatBusy.value) return
@@ -54,27 +64,23 @@ class AiStudioViewModel(
 
         val userMsg = AiChatMessage(id = "u_${System.currentTimeMillis()}", fromUser = true, text = clean)
         val aiMsgId = "a_${System.currentTimeMillis()}"
-        _messages.value = _messages.value + userMsg + AiChatMessage(id = aiMsgId, fromUser = false, text = "A pensar...")
+        _messages.value = _messages.value + userMsg + AiChatMessage(id = aiMsgId, fromUser = false, text = "A criar com Gemini...")
         _chatBusy.value = true
 
         viewModelScope.launch {
             try {
-                if (buildDesignAlso || clean.contains("cria", ignoreCase = true) ||
-                    clean.contains("cartaz", ignoreCase = true) ||
-                    clean.contains("flyer", ignoreCase = true) ||
-                    clean.contains("post", ignoreCase = true) ||
-                    clean.contains("design", ignoreCase = true)
-                ) {
+                if (buildDesignAlso || isDesignOrTemplatePrompt(clean)) {
                     val proposalResult = aiRepository.generateDesignProposal(clean)
                     proposalResult.fold(
                         onSuccess = { proposal ->
-                            val reply = "Criei uma proposta editável para \"${proposal.title}\":\n• Formato: ${proposal.formatName} (${proposal.width}×${proposal.height})\n• Título: ${proposal.headline}\n• Legenda sugerida: ${proposal.socialCaption}"
+                            val reply = "Template/Design criado para \"${proposal.title}\":\n• Categoria: ${proposal.category}\n• Formato: ${proposal.formatName} (${proposal.width}×${proposal.height})\n• Título: ${proposal.headline}\n• Legenda sugerida: ${proposal.socialCaption}"
                             updateAiMessage(aiMsgId, reply, proposal = proposal)
                         },
                         onFailure = { err ->
-                            // Fallback to streaming text answer if structured call failed, or surface error
+                            // Try streaming a text fallback so the user still gets a helpful response if structured output fails
+                            val msg = err.localizedMessage ?: "Falha na geração estruturada."
+                            _lastError.value = msg
                             streamTextIntoMessage(clean, aiMsgId)
-                            _lastError.value = err.localizedMessage
                         }
                     )
                 } else {
@@ -85,7 +91,7 @@ class AiStudioViewModel(
             } catch (e: Exception) {
                 val errMsg = e.localizedMessage ?: "Falha na comunicação com Firebase AI Logic."
                 _lastError.value = errMsg
-                updateAiMessage(aiMsgId, "Erro: $errMsg")
+                updateAiMessage(aiMsgId, "Não foi possível completar o pedido: $errMsg")
             } finally {
                 _chatBusy.value = false
             }

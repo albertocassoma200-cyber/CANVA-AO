@@ -72,6 +72,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
+import com.example.core.audio.LocalSoundEffects
 import com.example.core.model.NotificationItem
 import com.example.core.model.UiState
 import com.example.core.model.UserProfile
@@ -103,6 +104,7 @@ fun ProfileScreen(
     onDeleteAccount: () -> Unit
 ) {
     val context = LocalContext.current
+    val sound = LocalSoundEffects.current
     val profile = (userProfileState as? UiState.Success)?.data
     val notifications = (notificationsState as? UiState.Success)?.data.orEmpty()
     val unreadCount = notifications.count { !it.read }
@@ -148,7 +150,10 @@ fun ProfileScreen(
             ) {
                 Text("Perfil", style = MaterialTheme.typography.headlineMedium)
                 IconButton(
-                    onClick = { showSettingsSheet = true },
+                    onClick = {
+                        sound?.playTap()
+                        showSettingsSheet = true
+                    },
                     modifier = Modifier.minimumInteractiveComponentSize()
                 ) {
                     Icon(Icons.Filled.Settings, contentDescription = "Configurações")
@@ -344,8 +349,14 @@ fun ProfileScreen(
                         Text("Idioma")
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(selected = language == "pt", onClick = { onChangeLanguage("pt") }, label = { Text("Português") })
-                        FilterChip(selected = language == "en", onClick = { onChangeLanguage("en") }, label = { Text("English") })
+                        FilterChip(selected = language == "pt", onClick = {
+                            sound?.playTap()
+                            onChangeLanguage("pt")
+                        }, label = { Text("Português") })
+                        FilterChip(selected = language == "en", onClick = {
+                            sound?.playTap()
+                            onChangeLanguage("en")
+                        }, label = { Text("English") })
                     }
                 }
 
@@ -355,9 +366,18 @@ fun ProfileScreen(
                         Text("Tema")
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = themeMode == "dark", onClick = { onChangeTheme("dark") }, label = { Text("Modo Escuro") })
-                        FilterChip(selected = themeMode == "light", onClick = { onChangeTheme("light") }, label = { Text("Modo Claro") })
-                        FilterChip(selected = themeMode == "system", onClick = { onChangeTheme("system") }, label = { Text("Sistema") })
+                        FilterChip(selected = themeMode == "dark", onClick = {
+                            sound?.playTap()
+                            onChangeTheme("dark")
+                        }, label = { Text("Modo Escuro") })
+                        FilterChip(selected = themeMode == "light", onClick = {
+                            sound?.playTap()
+                            onChangeTheme("light")
+                        }, label = { Text("Modo Claro") })
+                        FilterChip(selected = themeMode == "system", onClick = {
+                            sound?.playTap()
+                            onChangeTheme("system")
+                        }, label = { Text("Sistema") })
                     }
                 }
 
@@ -370,7 +390,10 @@ fun ProfileScreen(
                         Icon(Icons.Filled.Notifications, contentDescription = null)
                         Text("Notificações")
                     }
-                    Switch(checked = notifDraft, onCheckedChange = { notifDraft = it })
+                    Switch(checked = notifDraft, onCheckedChange = {
+                        sound?.playTap()
+                        notifDraft = it
+                    })
                 }
 
                 Row(
@@ -382,7 +405,11 @@ fun ProfileScreen(
                         Icon(Icons.Filled.VolumeUp, contentDescription = null)
                         Text("Som")
                     }
-                    Switch(checked = soundEnabled, onCheckedChange = onToggleSound)
+                    Switch(checked = soundEnabled, onCheckedChange = { enabled ->
+                        sound?.enabled = enabled
+                        if (enabled) sound?.playSuccess()
+                        onToggleSound(enabled)
+                    })
                 }
 
                 Text(
@@ -393,6 +420,7 @@ fun ProfileScreen(
 
                 Button(
                     onClick = {
+                        sound?.playSuccess()
                         onUpdateProfile(profile?.displayName ?: "Criador CANVA AO", null, notifDraft)
                         showSettingsSheet = false
                     },

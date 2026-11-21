@@ -58,8 +58,12 @@ class CanvaAoRepository(
             .filterIsInstance<FirebaseFirestoreException>()
             .firstOrNull()
         if (firestoreError == null && error is CancellationException) throw error
+        val activeUid = auth.currentUser?.uid
+        if (activeUid == null || (expectedUid != null && activeUid != expectedUid)) {
+            throw CancellationException("Auth session ended")
+        }
         val exceptionToLog = firestoreError ?: (error as? Exception)
-        if (exceptionToLog != null && (expectedUid == null || auth.currentUser?.uid == expectedUid)) {
+        if (exceptionToLog != null) {
             handleFirestoreError(exceptionToLog, operationType, path)
         }
         throw error
@@ -74,8 +78,10 @@ class CanvaAoRepository(
             if (!userSnap.exists()) {
                 val profilePayload = mapOf(
                     "userId" to uid,
-                    "displayName" to (user.displayName?.takeIf { it.isNotBlank() } ?: "Criador CANVA AO"),
-                    "email" to (user.email ?: ""),
+                    "displayName" to (user.displayName?.takeIf { it.isNotBlank() }
+                        ?: user.phoneNumber?.takeIf { it.isNotBlank() }
+                        ?: "Criador CANVA AO"),
+                    "email" to (user.email?.takeIf { it.isNotBlank() } ?: user.phoneNumber ?: ""),
                     "photoUrl" to user.photoUrl?.toString(),
                     "role" to "user",
                     "blocked" to false,
@@ -210,7 +216,7 @@ class CanvaAoRepository(
     }
 
     fun observeTemplates(): Flow<List<DesignTemplate>> = flow {
-        requireUserId()
+        val uid = requireUserId()
         emitAll(
             db.collection("templates")
                 .snapshots()
@@ -219,12 +225,12 @@ class CanvaAoRepository(
                         .filter { it.published }
                         .sortedByDescending { it.createdAt?.seconds ?: 0L }
                 }
-                .handleStreamError(OperationType.LIST, "templates")
+                .handleStreamError(OperationType.LIST, "templates", uid)
         )
     }
 
     fun observeCategories(): Flow<List<CategoryEntry>> = flow {
-        requireUserId()
+        val uid = requireUserId()
         emitAll(
             db.collection("categories")
                 .snapshots()
@@ -233,7 +239,7 @@ class CanvaAoRepository(
                         .filter { it.active }
                         .sortedBy { it.sortOrder }
                 }
-                .handleStreamError(OperationType.LIST, "categories")
+                .handleStreamError(OperationType.LIST, "categories", uid)
         )
     }
 
@@ -267,22 +273,22 @@ class CanvaAoRepository(
     }
 
     fun observeAssets(): Flow<List<GraphicAsset>> = flow {
-        requireUserId()
+        val uid = requireUserId()
         emitAll(
             db.collection("assets")
                 .snapshots()
                 .map { snap -> snap.toObjects(GraphicAsset::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) }
-                .handleStreamError(OperationType.LIST, "assets")
+                .handleStreamError(OperationType.LIST, "assets", uid)
         )
     }
 
     fun observeFonts(): Flow<List<FontEntry>> = flow {
-        requireUserId()
+        val uid = requireUserId()
         emitAll(
             db.collection("fonts")
                 .snapshots()
                 .map { snap -> snap.toObjects(FontEntry::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) }
-                .handleStreamError(OperationType.LIST, "fonts")
+                .handleStreamError(OperationType.LIST, "fonts", uid)
         )
     }
 
@@ -739,38 +745,38 @@ class CanvaAoRepository(
     // --- Admin Operations (Protected by Firestore Security Rules isAdmin()) ---
 
     fun observeAllUsersAdmin(): Flow<List<UserProfile>> = flow {
-        requireUserId()
+        val uid = requireUserId()
         emitAll(
             db.collection("users").snapshots()
                 .map { snap -> snap.toObjects(UserProfile::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) }
-                .handleStreamError(OperationType.LIST, "users")
+                .handleStreamError(OperationType.LIST, "users", uid)
         )
     }
 
     fun observeAllExportsAdmin(): Flow<List<ExportRecord>> = flow {
-        requireUserId()
+        val uid = requireUserId()
         emitAll(
             db.collection("exports").snapshots()
                 .map { snap -> snap.toObjects(ExportRecord::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) }
-                .handleStreamError(OperationType.LIST, "exports")
+                .handleStreamError(OperationType.LIST, "exports", uid)
         )
     }
 
     fun observeAllRewardAdsAdmin(): Flow<List<RewardAdLog>> = flow {
-        requireUserId()
+        val uid = requireUserId()
         emitAll(
             db.collection("reward_ads").snapshots()
                 .map { snap -> snap.toObjects(RewardAdLog::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) }
-                .handleStreamError(OperationType.LIST, "reward_ads")
+                .handleStreamError(OperationType.LIST, "reward_ads", uid)
         )
     }
 
     fun observeAllReportsAdmin(): Flow<List<ReportItem>> = flow {
-        requireUserId()
+        val uid = requireUserId()
         emitAll(
             db.collection("reports").snapshots()
                 .map { snap -> snap.toObjects(ReportItem::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE) }
-                .handleStreamError(OperationType.LIST, "reports")
+                .handleStreamError(OperationType.LIST, "reports", uid)
         )
     }
 
